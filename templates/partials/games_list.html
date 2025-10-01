@@ -1,0 +1,64 @@
+{% if games %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Teams</th>
+                <th>Score</th>
+                <th>Duration</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr class="{% if game.is_shutout %}shutout{% endif %}">
+                <td>
+                    {{ game.date_played.strftime('%Y-%m-%d %H:%M') }}
+                </td>
+                <td>
+                    <span class="badge bg-secondary">{{ game.game_type }}</span>
+                </td>
+                <td>
+                    <div class="small">
+                        <strong>Team 1:</strong> 
+                        {% for gp in game.players if gp.team == 1 %}
+                            <span class="{% if gp.is_winner %}text-success fw-bold{% endif %}">{{ gp.player.name }}</span>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                        <br>
+                        <strong>Team 2:</strong> 
+                        {% for gp in game.players if gp.team == 2 %}
+                            <span class="{% if gp.is_winner %}text-success fw-bold{% endif %}">{{ gp.player.name }}</span>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </div>
+                </td>
+                <td>
+                    <strong class="{% if game.team1_score > game.team2_score %}text-success{% elif game.team1_score < game.team2_score %}text-danger{% endif %}">
+                        {{ game.team1_score }}
+                    </strong>
+                    -
+                    <strong class="{% if game.team2_score > game.team1_score %}text-success{% elif game.team2_score < game.team1_score %}text-danger{% endif %}">
+                        {{ game.team2_score }}
+                    </strong>
+                </td>
+                <td>
+                    {% if game.duration_minutes %}
+                        <span class="game-duration">{{ game.duration_minutes }} min</span>
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if game.is_shutout %}
+                        <span class="badge bg-warning text-dark">🎂 Shutout!</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">No games recorded yet. Record your first game above!</p>
+{% endif %}

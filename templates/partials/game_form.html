@@ -1,0 +1,90 @@
+{% if game_type %}
+<div class="row">
+    <div class="col-md-6">
+        <h6>Team 1</h6>
+        {% if game_type == '1v1' %}
+            <div class="mb-3">
+                <select class="form-select" name="team1_players" required>
+                    <option value="">Select Player 1</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% elif game_type == '2v2' %}
+            <div class="mb-3">
+                <select class="form-select" name="team1_players" required>
+                    <option value="">Select Player 1</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <select class="form-select" name="team1_players" required>
+                    <option value="">Select Player 2</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% elif game_type == '2v1' %}
+            <div class="mb-3">
+                <select class="form-select" name="team1_players" required>
+                    <option value="">Select Player 1</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <select class="form-select" name="team1_players" required>
+                    <option value="">Select Player 2</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endif %}
+    </div>
+    <div class="col-md-6">
+        <h6>Team 2</h6>
+        {% if game_type == '1v1' %}
+            <div class="mb-3">
+                <select class="form-select" name="team2_players" required>
+                    <option value="">Select Player 2</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% elif game_type == '2v2' %}
+            <div class="mb-3">
+                <select class="form-select" name="team2_players" required>
+                    <option value="">Select Player 1</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <select class="form-select" name="team2_players" required>
+                    <option value="">Select Player 2</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% elif game_type == '2v1' %}
+            <div class="mb-3">
+                <select class="form-select" name="team2_players" required>
+                    <option value="">Select Player</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,37 @@
+{% if win_rates %}
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Player</th>
+                {% for game_type in game_types %}
+                <th class="text-center">{{ game_type }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for player_name, stats in win_rates.items() %}
+            <tr>
+                <td><strong>{{ player_name }}</strong></td>
+                {% for game_type in game_types %}
+                <td class="text-center">
+                    {% if stats[game_type].games_played > 0 %}
+                        <div class="small">
+                            {{ "%.0f"|format(stats[game_type].win_rate) }}%
+                            <br>
+                            <span class="text-muted">{{ stats[game_type].games_won }}/{{ stats[game_type].games_played }}</span>
+                        </div>
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<small class="text-muted">Win rate and games won/total games for each game type</small>
+{% else %}
+<p class="text-muted">No games played yet!</p>
+{% endif %}

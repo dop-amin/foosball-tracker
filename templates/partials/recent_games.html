@@ -1,0 +1,39 @@
+{% if games %}
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Score</th>
+                <th>Players</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr class="{% if game.is_shutout %}shutout{% endif %}">
+                <td>{{ game.date_played.strftime('%m/%d %H:%M') }}</td>
+                <td><span class="badge bg-secondary">{{ game.game_type }}</span></td>
+                <td><strong>{{ game.team1_score }}-{{ game.team2_score }}</strong></td>
+                <td>
+                    <small>
+                        Team 1: 
+                        {% for gp in game.players if gp.team == 1 %}
+                            {{ gp.player.name }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                        <br>
+                        Team 2: 
+                        {% for gp in game.players if gp.team == 2 %}
+                            {{ gp.player.name }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </small>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('games') }}" class="btn btn-sm btn-outline-primary">View All Games</a>
+</div>
+{% else %}
+<p class="text-muted">No games played yet. <a href="{{ url_for('games') }}">Record your first game!</a></p>
+{% endif %}

@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>📈 Games Over Time</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="gamesChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>⏱️ Average Game Duration</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="durationChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🎮 Game Types Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="gameTypesChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>🏆 Player Performance</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="performanceChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>📊 Detailed Statistics</h5>
+            </div>
+            <div class="card-body" id="detailed-stats" hx-get="/api/detailed-stats" hx-trigger="load">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden div to load chart script -->
+<div id="chart-script-loader" hx-get="/api/chart-data" hx-trigger="load" hx-swap="innerHTML"></div>
+
+<script>
+// Function to create charts (will be called when data is loaded)
+function createCharts(data) {
+    console.log('Creating charts with data:', data);
+    
+    // Check if we have any data
+    if (!data || (!data.dates || data.dates.length === 0)) {
+        console.log('No data available for charts');
+        // Show "no data" message in each chart container
+        ['gamesChart', 'durationChart', 'gameTypesChart', 'performanceChart'].forEach(chartId => {
+            const canvas = document.getElementById(chartId);
+            if (canvas) {
+                canvas.style.display = 'none';
+                const parent = canvas.parentElement;
+                parent.innerHTML = '<div class="text-center text-muted p-4">No data available yet. Record some games to see charts!</div>';
+            }
+        });
+        return;
+    }
+    
+    // Games Over Time Chart
+    const gamesCtx = document.getElementById('gamesChart').getContext('2d');
+    new Chart(gamesCtx, {
+        type: 'line',
+        data: {
+            labels: data.dates,
+            datasets: [{
+                label: 'Games Played',
+                data: data.games_per_day,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Games Played Over Time'
+                }
+            }
+        }
+    });
+
+    // Duration Chart
+    const durationCtx = document.getElementById('durationChart').getContext('2d');
+    new Chart(durationCtx, {
+        type: 'bar',
+        data: {
+            labels: data.duration_labels,
+            datasets: [{
+                label: 'Average Duration (minutes)',
+                data: data.average_durations,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Average Game Duration by Type'
+                }
+            }
+        }
+    });
+
+    // Game Types Chart
+    const gameTypesCtx = document.getElementById('gameTypesChart').getContext('2d');
+    new Chart(gameTypesCtx, {
+        type: 'pie',
+        data: {
+            labels: data.game_types,
+            datasets: [{
+                data: data.game_type_counts,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.2)',
+                    'rgba(54, 162, 235, 0.2)',
+                    'rgba(255, 205, 86, 0.2)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 205, 86, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Game Types Distribution'
+                }
+            }
+        }
+    });
+
+    // Performance Chart
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(performanceCtx, {
+        type: 'bar',
+        data: {
+            labels: data.player_names,
+            datasets: [{
+                label: 'Win Rate (%)',
+                data: data.win_rates,
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Player Win Rates'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

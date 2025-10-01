@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5>Record New Game</h5>
+            </div>
+            <div class="card-body">
+                <form id="game-form" hx-post="/api/games" hx-target="#game-message">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="gameType" class="form-label">Game Type</label>
+                                <select class="form-select" id="gameType" name="game_type" required hx-get="/api/game-form" hx-target="#team-selection" hx-trigger="change">
+                                    <option value="">Select game type</option>
+                                    <option value="1v1">1 vs 1</option>
+                                    <option value="2v2">2 vs 2</option>
+                                    <option value="2v1">2 vs 1</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="datePlayed" class="form-label">Date Played</label>
+                                <input type="datetime-local" class="form-control" id="datePlayed" name="date_played">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="team-selection">
+                        <!-- Dynamic team selection will be loaded here -->
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="startTime" class="form-label">Start Time (Optional)</label>
+                                <input type="datetime-local" class="form-control" id="startTime" name="start_time">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="endTime" class="form-label">End Time (Optional)</label>
+                                <input type="datetime-local" class="form-control" id="endTime" name="end_time">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team1Score" class="form-label">Team 1 Score</label>
+                                <input type="number" class="form-control" id="team1Score" name="team1_score" min="0" max="10" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="team2Score" class="form-label">Team 2 Score</label>
+                                <input type="number" class="form-control" id="team2Score" name="team2_score" min="0" max="10" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success">Record Game</button>
+                </form>
+                <div id="game-message" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Game Rules</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><strong>🏆 Scoring:</strong> Games are played to 10 points</li>
+                    <li><strong>🎂 Cake Rule:</strong> 10-0 shutouts earn the winner a cake!</li>
+                    <li><strong>⏱️ Duration:</strong> Track start/end times for statistics</li>
+                    <li><strong>🎮 Game Types:</strong> 1v1, 2v2, or 2v1 matches</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Recent Games</h5>
+            </div>
+            <div class="card-body" id="games-history" hx-get="/api/games" hx-trigger="load">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.xhr.status === 201 && evt.target.id === 'game-form') {
+        evt.target.reset();
+        document.getElementById('team-selection').innerHTML = '';
+        htmx.trigger('#games-history', 'htmx:load');
+    }
+});
+
+// Set default date to now
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('datePlayed').value = now.toISOString().slice(0, 16);
+});
+</script>
+{% endblock %}

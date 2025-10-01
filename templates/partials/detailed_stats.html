@@ -1,0 +1,111 @@
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-primary">{{ stats.total_games }}</h2>
+                <p class="card-text">Total Games</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-success">{{ stats.total_players }}</h2>
+                <p class="card-text">Active Players</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-warning">
+                    {% if stats.avg_duration %}
+                        {{ stats.avg_duration }}m
+                    {% else %}
+                        -
+                    {% endif %}
+                </h2>
+                <p class="card-text">Avg Game Duration</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h2 class="text-info">{{ stats.game_type_stats|length }}</h2>
+                <p class="card-text">Game Formats</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6>🏃‍♂️ Most Active Players</h6>
+            </div>
+            <div class="card-body">
+                {% if stats.most_active %}
+                    <ul class="list-group list-group-flush">
+                        {% for player, count in stats.most_active %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ player }}
+                            <span class="badge bg-primary rounded-pill">{{ count }} games</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No games played yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6>🎯 Best Win Rates</h6>
+            </div>
+            <div class="card-body">
+                {% if stats.best_win_rates %}
+                    <ul class="list-group list-group-flush">
+                        {% for player, win_rate, total in stats.best_win_rates %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ player }}
+                            <div>
+                                <span class="badge bg-success rounded-pill">{{ "%.1f"|format(win_rate) }}%</span>
+                                <small class="text-muted">({{ total }} games)</small>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Need at least 3 games per player</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6>🎮 Game Type Popularity</h6>
+            </div>
+            <div class="card-body">
+                {% if stats.game_type_stats %}
+                    <ul class="list-group list-group-flush">
+                        {% for game_type, count in stats.game_type_stats %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ game_type }}
+                            <span class="badge bg-secondary rounded-pill">{{ count }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No games played yet</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

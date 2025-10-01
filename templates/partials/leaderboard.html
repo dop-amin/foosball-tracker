@@ -1,0 +1,62 @@
+{% if players_stats %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Games</th>
+                <th>W-L</th>
+                <th>Win Rate</th>
+                <th>Goals</th>
+                <th>+/-</th>
+                <th>Shutouts</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in players_stats %}
+            <tr class="{% if loop.index <= 3 %}winner{% endif %}">
+                <td>
+                    <strong>
+                        {% if loop.index == 1 %}🥇
+                        {% elif loop.index == 2 %}🥈
+                        {% elif loop.index == 3 %}🥉
+                        {% else %}{{ loop.index }}
+                        {% endif %}
+                    </strong>
+                </td>
+                <td><strong>{{ stat.player.name }}</strong></td>
+                <td>{{ stat.total_games }}</td>
+                <td>
+                    <span class="text-success">{{ stat.wins }}</span>-<span class="text-danger">{{ stat.losses }}</span>
+                </td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ stat.win_rate }}%" 
+                             aria-valuenow="{{ stat.win_rate }}" 
+                             aria-valuemin="0" aria-valuemax="100">
+                            {{ "%.1f"|format(stat.win_rate) }}%
+                        </div>
+                    </div>
+                </td>
+                <td>{{ stat.goals_for }}/{{ stat.goals_against }}</td>
+                <td class="{% if stat.goal_difference > 0 %}text-success{% elif stat.goal_difference < 0 %}text-danger{% endif %}">
+                    {% if stat.goal_difference > 0 %}+{% endif %}{{ stat.goal_difference }}
+                </td>
+                <td>
+                    <span class="badge bg-warning">{{ stat.shutouts_given }}</span> /
+                    <span class="badge bg-danger">{{ stat.shutouts_received }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<small class="text-muted">
+    <strong>Legend:</strong> +/- = Goal difference, 
+    Shutouts: <span class="badge bg-warning">Given</span> / <span class="badge bg-danger">Received</span>
+</small>
+{% else %}
+<p class="text-muted">No games played yet. Play some games to see the leaderboard!</p>
+{% endif %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Add New Player</h5>
+            </div>
+            <div class="card-body">
+                <form hx-post="/api/players" hx-target="#players-list" hx-swap="beforeend">
+                    <div class="mb-3">
+                        <label for="playerName" class="form-label">Player Name</label>
+                        <input type="text" class="form-control" id="playerName" name="name" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Player</button>
+                </form>
+                <div id="player-message" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>Cake Balances</h5>
+            </div>
+            <div class="card-body" id="cake-balances" hx-get="/api/cake-balances" hx-trigger="load">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>All Players</h5>
+            </div>
+            <div class="card-body">
+                <div id="players-list" hx-get="/api/players" hx-trigger="load">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.xhr.status === 201 && evt.target.tagName === 'FORM') {
+        evt.target.reset();
+        document.getElementById('player-message').innerHTML = '<div class="alert alert-success">Player added successfully!</div>';
+        setTimeout(() => {
+            document.getElementById('player-message').innerHTML = '';
+        }, 3000);
+    }
+});
+</script>
+{% endblock %}

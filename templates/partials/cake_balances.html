@@ -1,0 +1,24 @@
+{% if balances %}
+<div class="table-responsive">
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Owes</th>
+                <th>To</th>
+                <th>Cakes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for balance in balances %}
+            <tr>
+                <td>{{ balance.debtor.name }}</td>
+                <td>{{ balance.creditor.name }}</td>
+                <td><span class="badge bg-warning">{{ balance.balance }} 🎂</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">No cake debts... yet! 🎂</p>
+{% endif %}
