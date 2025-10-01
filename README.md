@@ -22,6 +22,20 @@ A web application for tracking office foosball games, built with Flask and htmx.
 
 ## Installation & Setup
 
+### Option 1: Docker Compose (Recommended)
+
+1. **Run with Docker Compose**:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. **Access the Application**:
+   Open your browser and go to `http://localhost:5000`
+
+The database will persist in the `instance/` directory, so your data is preserved across container restarts.
+
+### Option 2: Local Python Installation
+
 1. **Install Dependencies**:
    ```bash
    pip install -r requirements.txt
@@ -78,3 +92,7 @@ To extend the application, you can:
 - Add export functionality for data analysis
 
 Enjoy tracking your foosball games! 🏓
+
+---
+
+*Built with Claude Code*
