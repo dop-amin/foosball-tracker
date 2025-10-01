@@ -92,7 +92,7 @@
             <div class="card-header">
                 <h5>Recent Games</h5>
             </div>
-            <div class="card-body" id="games-history" hx-get="/api/games" hx-trigger="load">
+            <div class="card-body" id="games-history" hx-get="/api/games" hx-trigger="load, htmx:afterRequest from:#game-form">
                 <div class="text-center">
                     <div class="spinner-border" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -108,7 +108,6 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail.xhr.status === 201 && evt.target.id === 'game-form') {
         evt.target.reset();
         document.getElementById('team-selection').innerHTML = '';
-        htmx.trigger('#games-history', 'htmx:load');
     }
 });
 
