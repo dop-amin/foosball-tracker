@@ -117,16 +117,16 @@ def get_players():
 def add_player():
     name = request.form.get("name", "").strip()
     if not name:
-        return '<div class="alert alert-danger">Player name is required</div>', 400
+        return '<div class="alert alert-danger">Player name is required</div>', 200
 
     if Player.query.filter_by(name=name).first():
-        return '<div class="alert alert-danger">Player already exists</div>', 400
+        return '<div class="alert alert-danger">Player already exists</div>', 200
 
     player = Player(name=name)
     db.session.add(player)
     db.session.commit()
 
-    return render_template("partials/player_item.html", player=player), 201
+    return '<div class="alert alert-success">Player added successfully!</div>', 201
 
 
 @app.route("/api/cake-balances")

@@ -8,7 +8,7 @@
                 <h5>Add New Player</h5>
             </div>
             <div class="card-body">
-                <form hx-post="/api/players" hx-target="#players-list" hx-swap="beforeend">
+                <form id="player-form" hx-post="/api/players" hx-target="#player-message" hx-swap="innerHTML">
                     <div class="mb-3">
                         <label for="playerName" class="form-label">Player Name</label>
                         <input type="text" class="form-control" id="playerName" name="name" required>
@@ -42,7 +42,7 @@
                 <h5>All Players</h5>
             </div>
             <div class="card-body">
-                <div id="players-list" hx-get="/api/players" hx-trigger="load">
+                <div id="players-list" hx-get="/api/players" hx-trigger="load, htmx:afterRequest[detail.xhr.status==201] from:#player-form">
                     <div class="text-center">
                         <div class="spinner-border" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -56,9 +56,11 @@
 
 <script>
 document.body.addEventListener('htmx:afterRequest', function(evt) {
-    if (evt.detail.xhr.status === 201 && evt.target.tagName === 'FORM') {
-        evt.target.reset();
-        document.getElementById('player-message').innerHTML = '<div class="alert alert-success">Player added successfully!</div>';
+    if (evt.target.id === 'player-form') {
+        if (evt.detail.xhr.status === 201) {
+            evt.target.reset();
+        }
+        // Clear message after 3 seconds for both success and error
         setTimeout(() => {
             document.getElementById('player-message').innerHTML = '';
         }, 3000);
