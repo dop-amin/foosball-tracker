@@ -11,4 +11,4 @@ RUN mkdir -p instance
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "flask db upgrade && python app.py"]
+CMD ["sh", "-c", "flask db upgrade && python recalculate_elo.py && python app.py"]

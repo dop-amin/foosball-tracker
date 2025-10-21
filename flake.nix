@@ -44,6 +44,8 @@
             cat > $out/bin/foosball-tracker <<EOF
             #!${pkgs.bash}/bin/bash
             cd $out/share/foosball-tracker
+            ${python}/bin/python -m flask db upgrade
+            ${python}/bin/python recalculate_elo.py
             exec ${python}/bin/python app.py "\$@"
             EOF
             chmod +x $out/bin/foosball-tracker
@@ -160,6 +162,13 @@
                 ExecStartPre = pkgs.writeShellScript "foosball-tracker-pre" ''
                   mkdir -p ${cfg.dataDir}/instance
                   ln -sf ${cfg.dataDir}/foosball.db ${cfg.package}/share/foosball-tracker/instance/foosball.db || true
+
+                  # Run database migrations
+                  cd ${cfg.package}/share/foosball-tracker
+                  ${pkgs.python311}/bin/python -m flask db upgrade
+
+                  # Recalculate ELO ratings
+                  ${pkgs.python311}/bin/python ${cfg.package}/share/foosball-tracker/recalculate_elo.py
                 '';
 
                 ExecStart = "${pkgs.python311}/bin/python ${cfg.package}/share/foosball-tracker/app.py";

@@ -5,6 +5,7 @@
             <tr>
                 <th>Rank</th>
                 <th>Player</th>
+                <th>ELO Rating</th>
                 <th>Games</th>
                 <th>W-L</th>
                 <th>Win Rate</th>
@@ -26,6 +27,7 @@
                     </strong>
                 </td>
                 <td><strong>{{ stat.player.name }}</strong></td>
+                <td><strong class="text-primary">{{ stat.elo_rating }}</strong></td>
                 <td>{{ stat.total_games }}</td>
                 <td>
                     <span class="text-success">{{ stat.wins }}</span>-<span class="text-danger">{{ stat.losses }}</span>
