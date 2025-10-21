@@ -4,9 +4,10 @@ from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import os
 import json
+import secrets
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "foosball-secret-key-change-in-production"
+app.config["SECRET_KEY"] = secrets.token_hex(32)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///foosball.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
