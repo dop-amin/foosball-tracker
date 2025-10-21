@@ -12,7 +12,7 @@
         <tbody>
             {% for game in games %}
             <tr class="{% if game.is_shutout %}shutout{% endif %}">
-                <td>{{ game.date_played.strftime('%m/%d %H:%M') }}</td>
+                <td>{{ game.start_time.strftime('%m/%d %H:%M') }}</td>
                 <td><span class="badge bg-secondary">{{ game.game_type }}</span></td>
                 <td><strong>{{ game.team1_score }}-{{ game.team2_score }}</strong></td>
                 <td>

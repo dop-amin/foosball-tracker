@@ -9,24 +9,14 @@
             </div>
             <div class="card-body">
                 <form id="game-form" hx-post="/api/games" hx-target="#game-message">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="gameType" class="form-label">Game Type</label>
-                                <select class="form-select" id="gameType" name="game_type" required hx-get="/api/game-form" hx-target="#team-selection" hx-trigger="change">
-                                    <option value="">Select game type</option>
-                                    <option value="1v1">1 vs 1</option>
-                                    <option value="2v2">2 vs 2</option>
-                                    <option value="2v1">2 vs 1</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="datePlayed" class="form-label">Date Played</label>
-                                <input type="datetime-local" class="form-control" id="datePlayed" name="date_played">
-                            </div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="gameType" class="form-label">Game Type</label>
+                        <select class="form-select" id="gameType" name="game_type" required hx-get="/api/game-form" hx-target="#team-selection" hx-trigger="change">
+                            <option value="">Select game type</option>
+                            <option value="1v1">1 vs 1</option>
+                            <option value="2v2">2 vs 2</option>
+                            <option value="2v1">2 vs 1</option>
+                        </select>
                     </div>
 
                     <div id="team-selection">
@@ -36,8 +26,8 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="startTime" class="form-label">Start Time (Optional)</label>
-                                <input type="datetime-local" class="form-control" id="startTime" name="start_time">
+                                <label for="startTime" class="form-label">Start Time</label>
+                                <input type="datetime-local" class="form-control" id="startTime" name="start_time" required>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -111,11 +101,13 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
     }
 });
 
-// Set default date to now
+// Set default times to now
 document.addEventListener('DOMContentLoaded', function() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('datePlayed').value = now.toISOString().slice(0, 16);
+    const isoString = now.toISOString().slice(0, 16);
+    document.getElementById('startTime').value = isoString;
+    document.getElementById('endTime').value = isoString;
 });
 </script>
 {% endblock %}

@@ -15,7 +15,7 @@
             {% for game in games %}
             <tr class="{% if game.is_shutout %}shutout{% endif %}">
                 <td>
-                    {{ game.date_played.strftime('%Y-%m-%d %H:%M') }}
+                    {{ game.start_time.strftime('%Y-%m-%d %H:%M') }}
                 </td>
                 <td>
                     <span class="badge bg-secondary">{{ game.game_type }}</span>

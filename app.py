@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import os
 import json
@@ -10,6 +11,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///foosball.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 
 class Player(db.Model):
@@ -23,8 +25,7 @@ class Player(db.Model):
 
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    date_played = db.Column(db.DateTime, default=datetime.utcnow)
-    start_time = db.Column(db.DateTime)
+    start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
     game_type = db.Column(db.String(10), nullable=False)  # '1v1', '2v2', '2v1'
     team1_score = db.Column(db.Integer, nullable=False)
@@ -156,7 +157,7 @@ def get_quick_stats():
 
 @app.route("/api/recent-games")
 def get_recent_games():
-    recent_games = Game.query.order_by(Game.date_played.desc()).limit(5).all()
+    recent_games = Game.query.order_by(Game.start_time.desc()).limit(5).all()
     return render_template("partials/recent_games.html", games=recent_games)
 
 
@@ -175,24 +176,23 @@ def add_game():
 
     try:
         game_type = request.form.get("game_type")
-        date_played = parse(request.form.get("date_played"))
-        start_time = (
-            parse(request.form.get("start_time"))
-            if request.form.get("start_time")
-            else None
-        )
+        start_time = parse(request.form.get("start_time"))
         end_time = (
             parse(request.form.get("end_time"))
             if request.form.get("end_time")
             else None
         )
+
+        # Don't save end_time if it's the same as start_time
+        if end_time and end_time == start_time:
+            end_time = None
+
         team1_score = int(request.form.get("team1_score"))
         team2_score = int(request.form.get("team2_score"))
 
         # Create game
         game = Game(
             game_type=game_type,
-            date_played=date_played,
             start_time=start_time,
             end_time=end_time,
             team1_score=team1_score,
@@ -268,7 +268,7 @@ def update_cake_balance(game):
 
 @app.route("/api/games", methods=["GET"])
 def get_games():
-    games = Game.query.order_by(Game.date_played.desc()).limit(10).all()
+    games = Game.query.order_by(Game.start_time.desc()).limit(10).all()
     return render_template("partials/games_list.html", games=games)
 
 
@@ -409,12 +409,12 @@ def get_chart_data():
     from datetime import datetime, timedelta
 
     # Games over time data
-    games = Game.query.order_by(Game.date_played).all()
+    games = Game.query.order_by(Game.start_time).all()
     games_by_date = defaultdict(int)
 
     # Group games by date
     for game in games:
-        date_key = game.date_played.strftime("%Y-%m-%d")
+        date_key = game.start_time.strftime("%Y-%m-%d")
         games_by_date[date_key] += 1
 
     # Fill in missing dates for the last 30 days
