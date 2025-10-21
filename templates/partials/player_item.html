@@ -1,4 +1,4 @@
 <tr>
-    <td><strong>{{ player.name }}</strong></td>
+    <td><strong><a href="{{ url_for('player_detail', player_id=player.id) }}" class="text-decoration-none text-dark">{{ player.name }}</a></strong></td>
     <td>{{ player.created_at.strftime('%Y-%m-%d') }}</td>
 </tr>

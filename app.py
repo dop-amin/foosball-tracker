@@ -109,6 +109,12 @@ def statistics():
     return render_template("statistics.html")
 
 
+@app.route("/players/<int:player_id>")
+def player_detail(player_id):
+    player = Player.query.get_or_404(player_id)
+    return render_template("player_detail.html", player=player)
+
+
 # API Routes
 @app.route("/api/players", methods=["GET"])
 def get_players():
@@ -486,6 +492,116 @@ def get_win_rates():
     return render_template(
         "partials/win_rates.html", win_rates=win_rates, game_types=game_types
     )
+
+
+@app.route("/api/players/<int:player_id>/stats")
+def get_player_stats(player_id):
+    player = Player.query.get_or_404(player_id)
+
+    # Calculate player statistics
+    total_games = GamePlayer.query.filter_by(player_id=player.id).count()
+    wins = GamePlayer.query.filter_by(player_id=player.id, is_winner=True).count()
+    losses = total_games - wins
+
+    win_rate = (wins / total_games * 100) if total_games > 0 else 0
+
+    # Calculate goals scored and conceded
+    goals_for = 0
+    goals_against = 0
+
+    for gp in GamePlayer.query.filter_by(player_id=player.id).all():
+        game = gp.game
+        if gp.team == 1:
+            goals_for += game.team1_score
+            goals_against += game.team2_score
+        else:
+            goals_for += game.team2_score
+            goals_against += game.team1_score
+
+    # Calculate shutouts given and received
+    shutouts_given = 0
+    shutouts_received = 0
+
+    for gp in GamePlayer.query.filter_by(player_id=player.id).all():
+        game = gp.game
+        if game.is_shutout:
+            if gp.is_winner:
+                shutouts_given += 1
+            else:
+                shutouts_received += 1
+
+    # Calculate win rates by game type
+    game_types = ["1v1", "2v2", "2v1"]
+    win_rates_by_type = {}
+
+    for game_type in game_types:
+        games_played = (
+            db.session.query(GamePlayer)
+            .join(Game)
+            .filter(GamePlayer.player_id == player.id, Game.game_type == game_type)
+            .count()
+        )
+
+        games_won = (
+            db.session.query(GamePlayer)
+            .join(Game)
+            .filter(
+                GamePlayer.player_id == player.id,
+                Game.game_type == game_type,
+                GamePlayer.is_winner == True,
+            )
+            .count()
+        )
+
+        win_rate_type = (games_won / games_played * 100) if games_played > 0 else 0
+        win_rates_by_type[game_type] = {
+            "games_played": games_played,
+            "games_won": games_won,
+            "win_rate": win_rate_type,
+        }
+
+    # Calculate cake balance
+    cakes_owed_to_player = db.session.query(
+        db.func.sum(CakeBalance.balance)
+    ).filter(CakeBalance.creditor_id == player.id).scalar() or 0
+
+    cakes_player_owes = db.session.query(
+        db.func.sum(CakeBalance.balance)
+    ).filter(CakeBalance.debtor_id == player.id).scalar() or 0
+
+    stats = {
+        "player": player,
+        "total_games": total_games,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
+        "goals_for": goals_for,
+        "goals_against": goals_against,
+        "goal_difference": goals_for - goals_against,
+        "shutouts_given": shutouts_given,
+        "shutouts_received": shutouts_received,
+        "elo_rating": player.elo_rating,
+        "win_rates_by_type": win_rates_by_type,
+        "game_types": game_types,
+        "cakes_owed_to_player": cakes_owed_to_player,
+        "cakes_player_owes": cakes_player_owes,
+    }
+
+    return render_template("partials/player_stats.html", stats=stats)
+
+
+@app.route("/api/players/<int:player_id>/games")
+def get_player_games(player_id):
+    player = Player.query.get_or_404(player_id)
+
+    # Get all games this player participated in
+    game_players = GamePlayer.query.filter_by(player_id=player.id).all()
+    games = [gp.game for gp in game_players]
+
+    # Sort by most recent first
+    games.sort(key=lambda x: x.start_time, reverse=True)
+
+    return render_template("partials/player_games.html", games=games, player=player)
 
 
 @app.route("/api/chart-data")

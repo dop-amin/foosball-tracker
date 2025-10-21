@@ -26,7 +26,7 @@
                         {% endif %}
                     </strong>
                 </td>
-                <td><strong>{{ stat.player.name }}</strong></td>
+                <td><strong><a href="{{ url_for('player_detail', player_id=stat.player.id) }}" class="text-decoration-none text-dark">{{ stat.player.name }}</a></strong></td>
                 <td><strong class="text-primary">{{ stat.elo_rating }}</strong></td>
                 <td>{{ stat.total_games }}</td>
                 <td>

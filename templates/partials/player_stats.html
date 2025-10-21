@@ -1,0 +1,133 @@
+{% if stats.total_games > 0 %}
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title">ELO Rating</h6>
+                <h3>{{ stats.elo_rating }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">Win Rate</h6>
+                <h3>{{ "%.1f"|format(stats.win_rate) }}%</h3>
+                <small>{{ stats.wins }}W - {{ stats.losses }}L</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title">Total Games</h6>
+                <h3>{{ stats.total_games }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Goals</h6>
+                <div class="row">
+                    <div class="col-6">
+                        <p class="mb-1"><strong>For:</strong> <span class="text-success">{{ stats.goals_for }}</span></p>
+                        <p class="mb-1"><strong>Against:</strong> <span class="text-danger">{{ stats.goals_against }}</span></p>
+                    </div>
+                    <div class="col-6">
+                        <p class="mb-1"><strong>Difference:</strong>
+                            <span class="{% if stats.goal_difference > 0 %}text-success{% elif stats.goal_difference < 0 %}text-danger{% endif %}">
+                                {% if stats.goal_difference > 0 %}+{% endif %}{{ stats.goal_difference }}
+                            </span>
+                        </p>
+                        <p class="mb-1"><strong>Avg per game:</strong>
+                            {{ "%.1f"|format(stats.goals_for / stats.total_games) }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Shutouts</h6>
+                <p class="mb-1">
+                    <strong>Given:</strong> <span class="badge bg-warning text-dark">{{ stats.shutouts_given }}</span>
+                </p>
+                <p class="mb-1">
+                    <strong>Received:</strong> <span class="badge bg-danger">{{ stats.shutouts_received }}</span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Win Rates by Game Type</h6>
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Games</th>
+                            <th>Wins</th>
+                            <th>Win Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for game_type in stats.game_types %}
+                        {% set type_stats = stats.win_rates_by_type[game_type] %}
+                        {% if type_stats.games_played > 0 %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ game_type }}</span></td>
+                            <td>{{ type_stats.games_played }}</td>
+                            <td>{{ type_stats.games_won }}</td>
+                            <td>
+                                <div class="progress" style="height: 20px; min-width: 80px;">
+                                    <div class="progress-bar bg-success" role="progressbar"
+                                         style="width: {{ type_stats.win_rate }}%"
+                                         aria-valuenow="{{ type_stats.win_rate }}"
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        {{ "%.0f"|format(type_stats.win_rate) }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title">Cake Balance</h6>
+                <p class="mb-1">
+                    <strong>Cakes owed to {{ stats.player.name }}:</strong>
+                    <span class="badge bg-success">{{ stats.cakes_owed_to_player }}</span>
+                </p>
+                <p class="mb-1">
+                    <strong>Cakes {{ stats.player.name }} owes:</strong>
+                    <span class="badge bg-danger">{{ stats.cakes_player_owes }}</span>
+                </p>
+                <p class="mb-0 mt-2">
+                    <strong>Net Balance:</strong>
+                    <span class="{% if (stats.cakes_owed_to_player - stats.cakes_player_owes) > 0 %}text-success{% elif (stats.cakes_owed_to_player - stats.cakes_player_owes) < 0 %}text-danger{% endif %}">
+                        {% if (stats.cakes_owed_to_player - stats.cakes_player_owes) > 0 %}+{% endif %}{{ stats.cakes_owed_to_player - stats.cakes_player_owes }}
+                    </span>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<p class="text-muted">{{ stats.player.name }} hasn't played any games yet.</p>
+{% endif %}
