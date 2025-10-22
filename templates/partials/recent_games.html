@@ -7,6 +7,7 @@
                 <th>Type</th>
                 <th>Score</th>
                 <th>Players</th>
+                <th>ELO</th>
             </tr>
         </thead>
         <tbody>
@@ -17,14 +18,29 @@
                 <td><strong>{{ game.team1_score }}-{{ game.team2_score }}</strong></td>
                 <td>
                     <small>
-                        Team 1: 
+                        Team 1:
                         {% for gp in game.players if gp.team == 1 %}
                             {{ gp.player.name }}{% if not loop.last %}, {% endif %}
                         {% endfor %}
                         <br>
-                        Team 2: 
+                        Team 2:
                         {% for gp in game.players if gp.team == 2 %}
                             {{ gp.player.name }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </small>
+                </td>
+                <td>
+                    <small>
+                        {% for gp in game.players if gp.team == 1 %}
+                            <span class="{% if gp.elo_change > 0 %}text-success{% elif gp.elo_change < 0 %}text-danger{% endif %}">
+                                {% if gp.elo_change > 0 %}+{% endif %}{{ gp.elo_change if gp.elo_change else '-' }}
+                            </span>{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                        <br>
+                        {% for gp in game.players if gp.team == 2 %}
+                            <span class="{% if gp.elo_change > 0 %}text-success{% elif gp.elo_change < 0 %}text-danger{% endif %}">
+                                {% if gp.elo_change > 0 %}+{% endif %}{{ gp.elo_change if gp.elo_change else '-' }}
+                            </span>{% if not loop.last %}, {% endif %}
                         {% endfor %}
                     </small>
                 </td>

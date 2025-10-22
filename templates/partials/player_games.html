@@ -8,6 +8,7 @@
                 <th>Teams</th>
                 <th>Score</th>
                 <th>Result</th>
+                <th>ELO Change</th>
                 <th>Duration</th>
                 <th></th>
             </tr>
@@ -53,6 +54,15 @@
                         <span class="badge bg-success">Won</span>
                     {% else %}
                         <span class="badge bg-danger">Lost</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if player_gp.elo_change %}
+                        <span class="{% if player_gp.elo_change > 0 %}text-success fw-bold{% elif player_gp.elo_change < 0 %}text-danger fw-bold{% endif %}">
+                            {% if player_gp.elo_change > 0 %}+{% endif %}{{ player_gp.elo_change }}
+                        </span>
+                    {% else %}
+                        <span class="text-muted">-</span>
                     {% endif %}
                 </td>
                 <td>

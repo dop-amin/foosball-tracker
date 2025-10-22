@@ -63,6 +63,7 @@ class GamePlayer(db.Model):
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     team = db.Column(db.Integer, nullable=False)  # 1 or 2
     is_winner = db.Column(db.Boolean, nullable=False)
+    elo_change = db.Column(db.Integer, nullable=True)  # ELO rating change for this game
 
     game = db.relationship("Game", back_populates="players")
     player = db.relationship("Player")
@@ -209,18 +210,22 @@ def calculate_elo_change(team1_rating, team2_rating, team1_score, team2_score, k
 
 def update_elo_ratings(game):
     """
-    Update ELO ratings for all players in a game.
+    Update ELO ratings for all players in a game and store ELO changes.
     """
-    # Get team players
+    # Get team players and their GamePlayer records
     team1_players = []
     team2_players = []
+    team1_game_players = []
+    team2_game_players = []
 
     for gp in game.players:
         player = Player.query.get(gp.player_id)
         if gp.team == 1:
             team1_players.append(player)
+            team1_game_players.append(gp)
         else:
             team2_players.append(player)
+            team2_game_players.append(gp)
 
     # Calculate average team ratings
     team1_avg_rating = sum(p.elo_rating for p in team1_players) / len(team1_players)
@@ -231,12 +236,14 @@ def update_elo_ratings(game):
         team1_avg_rating, team2_avg_rating, game.team1_score, game.team2_score
     )
 
-    # Update player ratings
-    for player in team1_players:
+    # Update player ratings and store ELO changes
+    for i, player in enumerate(team1_players):
         player.elo_rating += team1_change
+        team1_game_players[i].elo_change = team1_change
 
-    for player in team2_players:
+    for i, player in enumerate(team2_players):
         player.elo_rating += team2_change
+        team2_game_players[i].elo_change = team2_change
 
 
 def recalculate_all_elo_ratings():
@@ -751,4 +758,5 @@ def get_detailed_stats():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        recalculate_all_elo_ratings()
     app.run(debug=True, host="0.0.0.0")
