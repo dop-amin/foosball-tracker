@@ -8,7 +8,9 @@ import secrets
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = secrets.token_hex(32)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///foosball.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_PATH", "sqlite:///foosball.db"
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)

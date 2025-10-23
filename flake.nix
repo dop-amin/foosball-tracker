@@ -159,7 +159,7 @@
                 Type = "simple";
                 User = cfg.user;
                 Group = cfg.group;
-                WorkingDirectory = cfg.dataDir;
+                WorkingDirectory = "${cfg.package}/share/foosball-tracker";
                 StateDirectory = "foosball-tracker";
                 StateDirectoryMode = "0750";
 
@@ -172,8 +172,7 @@
 
                 # Environment variables
                 Environment = [
-                  "DATABASE_PATH=${cfg.dataDir}/foosball.db"
-                ];
+                  "DATABASE_PATH=${cfg.dataDir}/foosball.db" ];
 
                 ExecStartPre = pkgs.writeShellScript "foosball-tracker-pre" ''
                   # Run database migrations
