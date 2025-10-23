@@ -155,3 +155,4 @@ The schema supports:
 - The app runs with `host="0.0.0.0"` to support Docker networking
 - SQLAlchemy track modifications is disabled for performance
 - When recording games, ELO ratings are updated immediately and cake balances are updated for shutouts
+- If you are returning status messages do this with HTTP status code 200

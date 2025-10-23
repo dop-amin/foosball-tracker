@@ -1,0 +1,161 @@
+{% if rounds %}
+<div class="alert alert-info mb-4">
+    <strong>Status:</strong>
+    {% if tournament.status == 'active' %}
+        <span class="badge bg-success">Active</span>
+    {% elif tournament.status == 'completed' %}
+        <span class="badge bg-secondary">Completed</span>
+    {% else %}
+        <span class="badge bg-warning">Setup</span>
+    {% endif %}
+
+    {% if tournament.started_at %}
+        | <strong>Started:</strong> {{ tournament.started_at.strftime('%Y-%m-%d %H:%M') }}
+    {% endif %}
+
+    {% if tournament.completed_at %}
+        | <strong>Completed:</strong> {{ tournament.completed_at.strftime('%Y-%m-%d %H:%M') }}
+    {% endif %}
+</div>
+
+<div class="tournament-bracket">
+    <style>
+        .tournament-bracket {
+            display: flex;
+            gap: 40px;
+            overflow-x: auto;
+            padding: 20px;
+        }
+        .bracket-round {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            min-width: 200px;
+        }
+        .bracket-round h5 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .bracket-match {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            margin: 10px 0;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .bracket-match.completed {
+            border-color: #28a745;
+        }
+        .bracket-match.active {
+            border-color: #007bff;
+            box-shadow: 0 0 10px rgba(0,123,255,0.3);
+        }
+        .bracket-player {
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .bracket-player:last-child {
+            border-bottom: none;
+        }
+        .bracket-player.winner {
+            background: #d4edda;
+            font-weight: bold;
+        }
+        .bracket-player.loser {
+            background: #f8f9fa;
+            opacity: 0.7;
+        }
+        .bracket-player.tbd {
+            background: #fff;
+            color: #6c757d;
+            font-style: italic;
+            cursor: default;
+        }
+        .bracket-player:hover:not(.tbd) {
+            background: #e9ecef;
+        }
+        .bracket-player.winner:hover {
+            background: #c3e6cb;
+        }
+        .player-name {
+            flex-grow: 1;
+        }
+        .player-seed {
+            font-size: 0.8em;
+            color: #6c757d;
+            margin-right: 8px;
+        }
+        .match-score {
+            font-weight: bold;
+            margin-left: 10px;
+            min-width: 30px;
+            text-align: center;
+        }
+    </style>
+
+    {% set round_names = {1: 'Finals', 2: 'Semi-Finals', 3: 'Quarter-Finals', 4: 'Round of 16', 5: 'Round of 32'} %}
+
+    {% for round_num in range(max_round, 0, -1) %}
+    <div class="bracket-round">
+        <h5>{{ round_names.get(round_num, 'Round ' + round_num|string) }}</h5>
+        {% for match in rounds[round_num]|sort(attribute='match_number') %}
+        <div class="bracket-match {% if match.winner_id %}completed{% elif match.player1_id and match.player2_id %}active{% endif %}"
+             id="match-{{ match.id }}"
+             {% if match.player1_id and match.player2_id and not match.winner_id %}
+             hx-get="/api/tournaments/{{ tournament.id }}/matches/{{ match.id }}/form"
+             hx-target="#match-{{ match.id }}"
+             hx-swap="outerHTML"
+             style="cursor: pointer;"
+             {% endif %}>
+
+            {% if match.player1_id or match.player2_id %}
+                <!-- Player 1 -->
+                <div class="bracket-player {% if match.game_id and match.winner_id == match.player1_id %}winner{% elif match.game_id and match.winner_id %}loser{% endif %}">
+                    <span class="player-name">
+                        {% if match.player1_id %}
+                            {{ match.player1.name }}
+                        {% else %}
+                            <span class="text-muted">TBD</span>
+                        {% endif %}
+                    </span>
+                    {% if match.game and match.player1_id %}
+                        <span class="match-score">{{ match.game.team1_score }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Player 2 -->
+                <div class="bracket-player {% if match.game_id and match.winner_id == match.player2_id %}winner{% elif match.game_id and match.winner_id %}loser{% endif %}">
+                    <span class="player-name">
+                        {% if match.player2_id %}
+                            {{ match.player2.name }}
+                        {% else %}
+                            <span class="text-muted">TBD</span>
+                        {% endif %}
+                    </span>
+                    {% if match.game and match.player2_id %}
+                        <span class="match-score">{{ match.game.team2_score }}</span>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="bracket-player tbd">
+                    <span class="player-name">Match TBD</span>
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<p class="text-muted">No matches in this tournament yet.</p>
+{% endif %}

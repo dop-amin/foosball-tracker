@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Tournaments - Foosball Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1 class="mb-4">Tournaments</h1>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Create New Tournament</h5>
+            </div>
+            <div class="card-body">
+                <form hx-post="/api/tournaments" hx-target="#tournament-response" hx-swap="innerHTML">
+                    <div id="tournament-response"></div>
+                    <div class="mb-3">
+                        <label for="tournament-name" class="form-label">Tournament Name</label>
+                        <input type="text" class="form-control" id="tournament-name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Select Players (minimum 2)</label>
+                        <div hx-get="/api/tournaments/players/select"
+                             hx-trigger="load"
+                             hx-target="#player-selection"
+                             hx-swap="innerHTML">
+                            <div id="player-selection">
+                                <div class="spinner-border spinner-border-sm text-secondary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <span class="text-muted ms-2">Loading players...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">Create Tournament</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Tournament List</h5>
+            </div>
+            <div class="card-body">
+                <div id="tournament-list" hx-get="/api/tournaments" hx-trigger="load" hx-swap="innerHTML">
+                    Loading tournaments...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tournament.name }} - Foosball Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ tournament.name }}</h1>
+            <a href="{{ url_for('tournaments') }}" class="btn btn-outline-secondary">Back to Tournaments</a>
+        </div>
+
+        <div id="tournament-bracket"
+             hx-get="/api/tournaments/{{ tournament.id }}/bracket"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            Loading bracket...
+        </div>
+    </div>
+</div>
+{% endblock %}

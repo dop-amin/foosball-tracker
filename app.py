@@ -1,10 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import json
 import secrets
+import math
+import random
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = secrets.token_hex(32)
@@ -80,6 +82,57 @@ class CakeBalance(db.Model):
 
     def __repr__(self):
         return f"<CakeBalance {self.debtor.name} owes {self.creditor.name}: {self.balance}>"
+
+
+class Tournament(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime)
+    completed_at = db.Column(db.DateTime)
+    status = db.Column(db.String(20), default="setup")  # 'setup', 'active', 'completed'
+
+    matches = db.relationship("TournamentMatch", back_populates="tournament", cascade="all, delete-orphan")
+    participants = db.relationship("TournamentParticipant", back_populates="tournament", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Tournament {self.name} ({self.status})>"
+
+
+class TournamentParticipant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tournament_id = db.Column(db.Integer, db.ForeignKey("tournament.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    seed = db.Column(db.Integer, nullable=False)  # Tournament seeding position
+    eliminated = db.Column(db.Boolean, default=False)
+
+    tournament = db.relationship("Tournament", back_populates="participants")
+    player = db.relationship("Player")
+
+    def __repr__(self):
+        return f"<TournamentParticipant {self.player.name} seed:{self.seed}>"
+
+
+class TournamentMatch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tournament_id = db.Column(db.Integer, db.ForeignKey("tournament.id"), nullable=False)
+    round_number = db.Column(db.Integer, nullable=False)  # 1=finals, 2=semifinals, 3=quarterfinals, etc.
+    match_number = db.Column(db.Integer, nullable=False)  # Position in the round
+    player1_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)  # Null if TBD
+    player2_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)  # Null if TBD
+    winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=True)  # Link to actual game played
+    next_match_id = db.Column(db.Integer, db.ForeignKey("tournament_match.id"), nullable=True)  # Winner advances to this match
+
+    tournament = db.relationship("Tournament", back_populates="matches")
+    player1 = db.relationship("Player", foreign_keys=[player1_id])
+    player2 = db.relationship("Player", foreign_keys=[player2_id])
+    winner = db.relationship("Player", foreign_keys=[winner_id])
+    game = db.relationship("Game")
+    next_match = db.relationship("TournamentMatch", remote_side=[id], foreign_keys=[next_match_id])
+
+    def __repr__(self):
+        return f"<TournamentMatch R{self.round_number}M{self.match_number}>"
 
 
 @app.route("/")
@@ -865,6 +918,380 @@ def get_detailed_stats():
     }
 
     return render_template("partials/detailed_stats.html", stats=stats)
+
+
+# Tournament helper functions
+def generate_tournament_bracket(tournament_id, player_ids):
+    """
+    Generate a single-elimination tournament bracket.
+    Uses power-of-2 bracket structure with byes for odd numbers.
+    """
+    tournament = Tournament.query.get(tournament_id)
+    if not tournament:
+        return False
+
+    num_players = len(player_ids)
+    if num_players < 2:
+        return False
+
+    # Calculate number of rounds needed (log2 of next power of 2)
+    num_rounds = math.ceil(math.log2(num_players))
+    total_matches_in_first_round = 2 ** (num_rounds - 1)
+
+    # Get players and randomize their order
+    players = Player.query.filter(Player.id.in_(player_ids)).all()
+    random.shuffle(players)
+
+    # Create participants with seeding (after randomization)
+    for idx, player in enumerate(players):
+        participant = TournamentParticipant(
+            tournament_id=tournament_id,
+            player_id=player.id,
+            seed=idx + 1
+        )
+        db.session.add(participant)
+
+    # Create bracket structure from finals backwards
+    match_map = {}  # Map of (round, match_number) to match object
+
+    # Create finals (round 1)
+    finals = TournamentMatch(
+        tournament_id=tournament_id,
+        round_number=1,
+        match_number=1
+    )
+    db.session.add(finals)
+    db.session.flush()
+    match_map[(1, 1)] = finals
+
+    # Create earlier rounds
+    for round_num in range(2, num_rounds + 1):
+        matches_in_round = 2 ** (round_num - 1)
+        for match_num in range(1, matches_in_round + 1):
+            match = TournamentMatch(
+                tournament_id=tournament_id,
+                round_number=round_num,
+                match_number=match_num,
+                next_match_id=match_map[(round_num - 1, (match_num + 1) // 2)].id
+            )
+            db.session.add(match)
+            db.session.flush()
+            match_map[(round_num, match_num)] = match
+
+    # Assign players to first round using proper tournament seeding
+    first_round_matches = sorted(
+        [m for r, m in match_map.items() if r[0] == num_rounds],
+        key=lambda x: x.match_number
+    )
+
+    # Calculate number of byes needed (higher seeds get byes)
+    bracket_size = 2 ** num_rounds
+    num_byes = bracket_size - num_players
+
+    # Standard bracket seeding order for power of 2
+    # For 8 players: [1,8, 4,5, 2,7, 3,6]
+    def get_seeding_for_round(n):
+        if n == 1:
+            return [1, 2]
+        prev = get_seeding_for_round(n - 1)
+        size = 2 ** n
+        result = []
+        for seed in prev:
+            result.append(seed)
+            result.append(size + 1 - seed)
+        return result
+
+    seeding_order = get_seeding_for_round(num_rounds)
+
+    # Assign players and byes
+    # Top seeds (lowest numbers) get byes when needed
+    for i, match in enumerate(first_round_matches):
+        seed1 = seeding_order[i * 2]
+        seed2 = seeding_order[i * 2 + 1]
+
+        # Assign player if seed is within player count, otherwise bye
+        player1_id = players[seed1 - 1].id if seed1 <= num_players else None
+        player2_id = players[seed2 - 1].id if seed2 <= num_players else None
+
+        match.player1_id = player1_id
+        match.player2_id = player2_id
+
+        # Handle byes - if only one player, they automatically advance
+        if match.player1_id and not match.player2_id:
+            match.winner_id = match.player1_id
+            advance_winner(match, auto_advance_byes=True)
+        elif match.player2_id and not match.player1_id:
+            match.winner_id = match.player2_id
+            advance_winner(match, auto_advance_byes=True)
+
+    db.session.commit()
+    return True
+
+
+def advance_winner(match, auto_advance_byes=False):
+    """Advance the winner of a match to the next round.
+
+    Args:
+        match: The match whose winner should advance
+        auto_advance_byes: If True, automatically advance through byes (used during bracket setup)
+    """
+    if match.winner_id and match.next_match_id:
+        next_match = TournamentMatch.query.get(match.next_match_id)
+        if next_match:
+            # Determine which slot to fill in next match
+            parent_matches = TournamentMatch.query.filter_by(
+                next_match_id=match.next_match_id
+            ).order_by(TournamentMatch.match_number).all()
+
+            if parent_matches[0].id == match.id:
+                next_match.player1_id = match.winner_id
+            else:
+                next_match.player2_id = match.winner_id
+
+            # Only auto-advance through byes during initial bracket setup
+            if auto_advance_byes:
+                # Get both parent matches feeding into the next match
+                parent_matches = TournamentMatch.query.filter_by(
+                    next_match_id=next_match.id
+                ).all()
+
+                # Check if BOTH parent matches are resolved (have winners or are byes)
+                both_parents_resolved = all(
+                    parent.winner_id is not None for parent in parent_matches
+                )
+
+                # Only auto-advance if both parents are resolved and one slot is still empty
+                # (This means it's a true bye, not waiting for a match result)
+                if both_parents_resolved:
+                    if next_match.player1_id and not next_match.player2_id:
+                        next_match.winner_id = next_match.player1_id
+                        advance_winner(next_match, auto_advance_byes=True)
+                    elif next_match.player2_id and not next_match.player1_id:
+                        next_match.winner_id = next_match.player2_id
+                        advance_winner(next_match, auto_advance_byes=True)
+
+
+# Tournament Routes
+@app.route("/tournaments")
+def tournaments():
+    return render_template("tournaments.html")
+
+
+@app.route("/tournaments/<int:tournament_id>")
+def tournament_detail(tournament_id):
+    tournament = Tournament.query.get_or_404(tournament_id)
+    return render_template("tournament_detail.html", tournament=tournament)
+
+
+# Tournament API Routes
+@app.route("/api/tournaments/players/select", methods=["GET"])
+def get_tournament_players():
+    players = Player.query.order_by(Player.elo_rating.desc()).all()
+    return render_template("partials/player_selection.html", players=players)
+
+
+@app.route("/api/tournaments", methods=["GET"])
+def get_tournaments():
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    pagination = Tournament.query.order_by(Tournament.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return render_template(
+        "partials/tournaments_list.html",
+        tournaments=pagination.items,
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+    )
+
+
+@app.route("/api/tournaments", methods=["POST"])
+def create_tournament():
+    name = request.form.get("name", "").strip()
+    player_ids = request.form.getlist("player_ids")
+
+    if not name:
+        return "<div class='alert alert-danger'>Tournament name is required</div>"
+
+    if len(player_ids) < 2:
+        return "<div class='alert alert-danger'>At least 2 players are required</div>"
+
+    try:
+        player_ids = [int(pid) for pid in player_ids]
+    except ValueError:
+        return "<div class='alert alert-danger'>Invalid player selection</div>"
+
+    tournament = Tournament(name=name, status="setup")
+    db.session.add(tournament)
+    db.session.flush()
+
+    # Generate bracket
+    if not generate_tournament_bracket(tournament.id, player_ids):
+        db.session.rollback()
+        return "<div class='alert alert-danger'>Failed to generate tournament bracket</div>"
+
+    tournament.status = "active"
+    tournament.started_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    # Return redirect instruction for htmx
+    response = make_response("")
+    response.headers['HX-Redirect'] = url_for("tournament_detail", tournament_id=tournament.id)
+    return response
+
+
+@app.route("/api/tournaments/<int:tournament_id>/bracket")
+def get_tournament_bracket(tournament_id):
+    tournament = Tournament.query.get_or_404(tournament_id)
+    matches = TournamentMatch.query.filter_by(tournament_id=tournament_id).order_by(
+        TournamentMatch.round_number.desc(), TournamentMatch.match_number
+    ).all()
+
+    # Group matches by round
+    rounds = {}
+    for match in matches:
+        if match.round_number not in rounds:
+            rounds[match.round_number] = []
+        rounds[match.round_number].append(match)
+
+    return render_template(
+        "partials/tournament_bracket.html",
+        tournament=tournament,
+        rounds=rounds,
+        max_round=max(rounds.keys()) if rounds else 0
+    )
+
+
+@app.route("/api/tournaments/<int:tournament_id>/matches/<int:match_id>/form", methods=["GET"])
+def get_match_form(tournament_id, match_id):
+    tournament = Tournament.query.get_or_404(tournament_id)
+    match = TournamentMatch.query.filter_by(
+        id=match_id, tournament_id=tournament_id
+    ).first_or_404()
+
+    if not match.player1_id or not match.player2_id:
+        return "<div class='alert alert-warning'>Match is not ready (missing players)</div>"
+
+    if match.winner_id:
+        return "<div class='alert alert-info'>Match already completed</div>"
+
+    return render_template("partials/match_form.html", tournament=tournament, match=match)
+
+
+@app.route("/api/tournaments/<int:tournament_id>/matches/<int:match_id>", methods=["POST"])
+def record_tournament_match(tournament_id, match_id):
+    tournament = Tournament.query.get_or_404(tournament_id)
+    match = TournamentMatch.query.filter_by(
+        id=match_id, tournament_id=tournament_id
+    ).first_or_404()
+
+    # Helper function to return form with error
+    def return_form_with_error(error_msg):
+        response = make_response(render_template("partials/match_form.html", tournament=tournament, match=match, error=error_msg))
+        response.headers['HX-Retarget'] = f'#match-{match.id}'
+        response.headers['HX-Reswap'] = 'outerHTML'
+        return response
+
+    if match.winner_id:
+        return return_form_with_error("Match already completed")
+
+    if not match.player1_id or not match.player2_id:
+        return return_form_with_error("Match is not ready (missing players)")
+
+    team1_score = request.form.get("team1_score", type=int)
+    team2_score = request.form.get("team2_score", type=int)
+
+    # Validate scores
+    if team1_score is None or team2_score is None:
+        return return_form_with_error("Both scores are required")
+
+    if team1_score < 0 or team2_score < 0:
+        return return_form_with_error("Scores cannot be negative!")
+
+    if team1_score > 11 or team2_score > 11:
+        return return_form_with_error("Maximum score is 11!")
+
+    # Validate that it's not a draw
+    if team1_score == team2_score:
+        return return_form_with_error("Draw games are not allowed. One team must win!")
+
+    # Determine winner based on score
+    winner_id = match.player1_id if team1_score > team2_score else match.player2_id
+
+    # Create the actual game record
+    game = Game(
+        game_type="1v1",
+        team1_score=team1_score,
+        team2_score=team2_score,
+        start_time=datetime.now(timezone.utc)
+    )
+    db.session.add(game)
+    db.session.flush()
+
+    # Link players to game
+    gp1 = GamePlayer(
+        game_id=game.id,
+        player_id=match.player1_id,
+        team=1,
+        is_winner=(winner_id == match.player1_id)
+    )
+    gp2 = GamePlayer(
+        game_id=game.id,
+        player_id=match.player2_id,
+        team=2,
+        is_winner=(winner_id == match.player2_id)
+    )
+    db.session.add(gp1)
+    db.session.add(gp2)
+
+    # Update ELO ratings
+    update_elo_ratings(game)
+
+    # Update tournament match
+    match.winner_id = winner_id
+    match.game_id = game.id
+
+    # Advance winner to next round
+    advance_winner(match)
+
+    # Commit the transaction first to ensure all changes are saved
+    db.session.commit()
+
+    # Check if tournament is complete (must be after commit)
+    finals = TournamentMatch.query.filter_by(
+        tournament_id=tournament_id, round_number=1
+    ).first()
+
+    if finals and finals.winner_id and finals.game_id:
+        # Finals has been played and has a winner - tournament is complete
+        tournament.status = "completed"
+        tournament.completed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    # Return updated bracket HTML directly (not a redirect)
+    matches = TournamentMatch.query.filter_by(tournament_id=tournament_id).order_by(
+        TournamentMatch.round_number.desc(), TournamentMatch.match_number
+    ).all()
+
+    # Group matches by round
+    rounds = {}
+    for match_obj in matches:
+        if match_obj.round_number not in rounds:
+            rounds[match_obj.round_number] = []
+        rounds[match_obj.round_number].append(match_obj)
+
+    # On success, return bracket with headers to target the bracket container
+    response = make_response(render_template(
+        "partials/tournament_bracket.html",
+        tournament=tournament,
+        rounds=rounds,
+        max_round=max(rounds.keys()) if rounds else 0
+    ))
+    response.headers['HX-Retarget'] = '#tournament-bracket'
+    response.headers['HX-Reswap'] = 'innerHTML'
+    return response
 
 
 if __name__ == "__main__":
