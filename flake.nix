@@ -51,20 +51,9 @@
             rm -rf $out/share/foosball-tracker/.git
             rm -rf $out/share/foosball-tracker/instance
 
-            # Create wrapper scripts
-            cat > $out/bin/foosball-tracker <<EOF
-            #!${pkgs.bash}/bin/bash
-            cd $out/share/foosball-tracker
-            ${pythonEnv}/bin/python -m flask db upgrade
-            ${pythonEnv}/bin/python recalculate_elo.py
-            exec ${pythonEnv}/bin/python app.py "\$@"
-            EOF
-            chmod +x $out/bin/foosball-tracker
-
             # Migration script for systemd
             cat > $out/bin/foosball-tracker-migrate <<EOF
             #!${pkgs.bash}/bin/bash
-            cd $out/share/foosball-tracker
             ${pythonEnv}/bin/python -m flask db upgrade
             ${pythonEnv}/bin/python recalculate_elo.py
             EOF
@@ -73,7 +62,6 @@
             # Run script for systemd
             cat > $out/bin/foosball-tracker-run <<EOF
             #!${pkgs.bash}/bin/bash
-            cd $out/share/foosball-tracker
             exec ${pythonEnv}/bin/python app.py "\$@"
             EOF
             chmod +x $out/bin/foosball-tracker-run
@@ -188,11 +176,7 @@
                 ];
 
                 ExecStartPre = pkgs.writeShellScript "foosball-tracker-pre" ''
-                  mkdir -p ${cfg.dataDir}/instance
-                  ln -sf ${cfg.dataDir}/foosball.db ${cfg.package}/share/foosball-tracker/instance/foosball.db || true
-
                   # Run database migrations
-                  cd ${cfg.package}/share/foosball-tracker
                   ${cfg.package}/bin/foosball-tracker-migrate
                 '';
 
