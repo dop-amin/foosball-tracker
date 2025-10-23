@@ -1,4 +1,4 @@
-# 🏓 Foosball Tracker
+# ⚽ Foosball Tracker
 
 A web application for tracking office foosball games, built with Flask and htmx.
 
@@ -91,7 +91,7 @@ To extend the application, you can:
 - Create mobile-specific features
 - Add export functionality for data analysis
 
-Enjoy tracking your foosball games! 🏓
+Enjoy tracking your foosball games! ⚽
 
 ---
 

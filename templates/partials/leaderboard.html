@@ -16,13 +16,14 @@
         </thead>
         <tbody>
             {% for stat in players_stats %}
-            <tr class="{% if loop.index <= 3 %}winner{% endif %}">
+            {% set actual_rank = rank_offset + loop.index %}
+            <tr class="{% if actual_rank <= 3 %}winner{% endif %}">
                 <td>
                     <strong>
-                        {% if loop.index == 1 %}🥇
-                        {% elif loop.index == 2 %}🥈
-                        {% elif loop.index == 3 %}🥉
-                        {% else %}{{ loop.index }}
+                        {% if actual_rank == 1 %}🥇
+                        {% elif actual_rank == 2 %}🥈
+                        {% elif actual_rank == 3 %}🥉
+                        {% else %}{{ actual_rank }}
                         {% endif %}
                     </strong>
                 </td>
@@ -47,17 +48,22 @@
                     {% if stat.goal_difference > 0 %}+{% endif %}{{ stat.goal_difference }}
                 </td>
                 <td>
-                    <span class="badge bg-warning">{{ stat.shutouts_given }}</span> /
-                    <span class="badge bg-danger">{{ stat.shutouts_received }}</span>
+                    <span class="badge bg-info text-dark">{{ stat.shutouts_given }}</span> /
+                    <span class="badge bg-danger text-white">{{ stat.shutouts_received }}</span>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+{% set hx_get = url_for('get_leaderboard') %}
+{% set hx_target = '#leaderboard-content' %}
+{% include 'partials/pagination.html' %}
+
 <small class="text-muted">
-    <strong>Legend:</strong> +/- = Goal difference, 
-    Shutouts: <span class="badge bg-warning">Given</span> / <span class="badge bg-danger">Received</span>
+    <strong>Legend:</strong> +/- = Goal difference,
+    Shutouts: <span class="badge bg-info text-dark">Given</span> / <span class="badge bg-danger text-white">Received</span>
 </small>
 {% else %}
 <p class="text-muted">No games played yet. Play some games to see the leaderboard!</p>

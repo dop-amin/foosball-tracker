@@ -69,7 +69,7 @@
                 </td>
                 <td>
                     {% if game.is_shutout %}
-                        <span class="badge bg-warning text-dark">🎂 Shutout!</span>
+                        <span class="badge bg-info text-dark">🎂 Shutout!</span>
                     {% endif %}
                 </td>
             </tr>
@@ -77,6 +77,11 @@
         </tbody>
     </table>
 </div>
+
+{% set hx_get = url_for('get_games') %}
+{% set hx_target = '#games-history' %}
+{% include 'partials/pagination.html' %}
+
 {% else %}
 <p class="text-muted">No games recorded yet. Record your first game above!</p>
 {% endif %}

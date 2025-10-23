@@ -119,8 +119,19 @@ def player_detail(player_id):
 # API Routes
 @app.route("/api/players", methods=["GET"])
 def get_players():
-    players = Player.query.order_by(Player.name).all()
-    return render_template("partials/players_list.html", players=players)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
+    pagination = Player.query.order_by(Player.name).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return render_template(
+        "partials/players_list.html",
+        players=pagination.items,
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+    )
 
 
 @app.route("/api/players", methods=["POST"])
@@ -141,8 +152,21 @@ def add_player():
 
 @app.route("/api/cake-balances")
 def get_cake_balances():
-    balances = db.session.query(CakeBalance).filter(CakeBalance.balance > 0).all()
-    return render_template("partials/cake_balances.html", balances=balances)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
+    pagination = (
+        db.session.query(CakeBalance)
+        .filter(CakeBalance.balance > 0)
+        .paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    return render_template(
+        "partials/cake_balances.html",
+        balances=pagination.items,
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+    )
 
 
 @app.route("/api/quick-stats")
@@ -179,7 +203,9 @@ def get_game_form():
     )
 
 
-def calculate_elo_change(team1_rating, team2_rating, team1_score, team2_score, k_factor=32):
+def calculate_elo_change(
+    team1_rating, team2_rating, team1_score, team2_score, k_factor=32
+):
     """
     Calculate ELO rating changes for both teams.
 
@@ -367,12 +393,26 @@ def update_cake_balance(game):
 
 @app.route("/api/games", methods=["GET"])
 def get_games():
-    games = Game.query.order_by(Game.start_time.desc()).limit(10).all()
-    return render_template("partials/games_list.html", games=games)
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
+    pagination = Game.query.order_by(Game.start_time.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return render_template(
+        "partials/games_list.html",
+        games=pagination.items,
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+    )
 
 
 @app.route("/api/leaderboard")
 def get_leaderboard():
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
     # Calculate player statistics
     players_stats = []
     players = Player.query.all()
@@ -428,35 +468,65 @@ def get_leaderboard():
     # Sort by ELO rating (highest first)
     players_stats.sort(key=lambda x: x["elo_rating"], reverse=True)
 
-    return render_template("partials/leaderboard.html", players_stats=players_stats)
+    # Manual pagination
+    total_items = len(players_stats)
+    total_pages = (total_items + per_page - 1) // per_page  # Ceiling division
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_stats = players_stats[start_idx:end_idx]
+
+    return render_template(
+        "partials/leaderboard.html",
+        players_stats=paginated_stats,
+        current_page=page,
+        total_pages=total_pages,
+        rank_offset=(page - 1) * per_page,
+    )
 
 
 @app.route("/api/cake-leaderboard")
 def get_cake_leaderboard():
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
     # Get players with most cakes owed to them
-    cake_stats = (
+    cake_stats_query = (
         db.session.query(
             Player.name, db.func.sum(CakeBalance.balance).label("total_cakes")
         )
         .join(CakeBalance, Player.id == CakeBalance.creditor_id)
         .group_by(Player.id, Player.name)
         .order_by(db.func.sum(CakeBalance.balance).desc())
-        .all()
     )
 
     # Get players who owe the most cakes
-    debt_stats = (
+    debt_stats_query = (
         db.session.query(
             Player.name, db.func.sum(CakeBalance.balance).label("total_debt")
         )
         .join(CakeBalance, Player.id == CakeBalance.debtor_id)
         .group_by(Player.id, Player.name)
         .order_by(db.func.sum(CakeBalance.balance).desc())
-        .all()
     )
 
+    # Calculate pagination based on the larger of the two lists
+    cake_stats_all = cake_stats_query.all()
+    debt_stats_all = debt_stats_query.all()
+    total_items = max(len(cake_stats_all), len(debt_stats_all))
+    total_pages = (total_items + per_page - 1) // per_page
+
+    # Paginate both lists
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    cake_stats = cake_stats_all[start_idx:end_idx]
+    debt_stats = debt_stats_all[start_idx:end_idx]
+
     return render_template(
-        "partials/cake_leaderboard.html", cake_stats=cake_stats, debt_stats=debt_stats
+        "partials/cake_leaderboard.html",
+        cake_stats=cake_stats,
+        debt_stats=debt_stats,
+        current_page=page,
+        total_pages=total_pages,
     )
 
 
@@ -568,13 +638,19 @@ def get_player_stats(player_id):
         }
 
     # Calculate cake balance
-    cakes_owed_to_player = db.session.query(
-        db.func.sum(CakeBalance.balance)
-    ).filter(CakeBalance.creditor_id == player.id).scalar() or 0
+    cakes_owed_to_player = (
+        db.session.query(db.func.sum(CakeBalance.balance))
+        .filter(CakeBalance.creditor_id == player.id)
+        .scalar()
+        or 0
+    )
 
-    cakes_player_owes = db.session.query(
-        db.func.sum(CakeBalance.balance)
-    ).filter(CakeBalance.debtor_id == player.id).scalar() or 0
+    cakes_player_owes = (
+        db.session.query(db.func.sum(CakeBalance.balance))
+        .filter(CakeBalance.debtor_id == player.id)
+        .scalar()
+        or 0
+    )
 
     stats = {
         "player": player,
@@ -599,6 +675,9 @@ def get_player_stats(player_id):
 
 @app.route("/api/players/<int:player_id>/games")
 def get_player_games(player_id):
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
     player = Player.query.get_or_404(player_id)
 
     # Get all games this player participated in
@@ -608,7 +687,20 @@ def get_player_games(player_id):
     # Sort by most recent first
     games.sort(key=lambda x: x.start_time, reverse=True)
 
-    return render_template("partials/player_games.html", games=games, player=player)
+    # Manual pagination
+    total_items = len(games)
+    total_pages = (total_items + per_page - 1) // per_page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_games = games[start_idx:end_idx]
+
+    return render_template(
+        "partials/player_games.html",
+        games=paginated_games,
+        player=player,
+        current_page=page,
+        total_pages=total_pages,
+    )
 
 
 @app.route("/api/chart-data")
@@ -758,5 +850,4 @@ def get_detailed_stats():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        recalculate_all_elo_ratings()
     app.run(debug=True, host="0.0.0.0")

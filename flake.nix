@@ -19,6 +19,9 @@
 
           src = ./.;
 
+          # This project doesn't use setuptools/pyproject.toml
+          format = "other";
+
           propagatedBuildInputs = with pythonPackages; [
             flask
             flask-sqlalchemy

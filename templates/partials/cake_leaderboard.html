@@ -14,7 +14,7 @@
                     {% for stat in cake_stats %}
                     <tr>
                         <td>{{ stat.name }}</td>
-                        <td><span class="badge bg-success cake-credit">{{ stat.total_cakes }} 🎂</span></td>
+                        <td><span class="badge bg-success text-white cake-credit">{{ stat.total_cakes }} 🎂</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -38,7 +38,7 @@
                     {% for stat in debt_stats %}
                     <tr>
                         <td>{{ stat.name }}</td>
-                        <td><span class="badge bg-danger cake-owed">{{ stat.total_debt }} 🎂</span></td>
+                        <td><span class="badge bg-danger text-white cake-owed">{{ stat.total_debt }} 🎂</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -47,6 +47,10 @@
     </div>
     {% endif %}
 </div>
+
+{% set hx_get = url_for('get_cake_leaderboard') %}
+{% set hx_target = '#cake-leaderboard' %}
+{% include 'partials/pagination.html' %}
 
 {% if not cake_stats and not debt_stats %}
 <p class="text-muted text-center">No shutouts yet! Play some games and dominate 10-0 to earn cakes! 🎂</p>

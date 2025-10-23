@@ -13,12 +13,17 @@
             <tr>
                 <td>{{ balance.debtor.name }}</td>
                 <td>{{ balance.creditor.name }}</td>
-                <td><span class="badge bg-warning">{{ balance.balance }} 🎂</span></td>
+                <td><span class="badge bg-info text-dark">{{ balance.balance }} 🎂</span></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+{% set hx_get = url_for('get_cake_balances') %}
+{% set hx_target = '#cake-balances' %}
+{% include 'partials/pagination.html' %}
+
 {% else %}
 <p class="text-muted">No cake debts... yet! 🎂</p>
 {% endif %}

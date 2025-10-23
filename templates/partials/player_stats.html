@@ -56,10 +56,10 @@
             <div class="card-body">
                 <h6 class="card-title">Shutouts</h6>
                 <p class="mb-1">
-                    <strong>Given:</strong> <span class="badge bg-warning text-dark">{{ stats.shutouts_given }}</span>
+                    <strong>Given:</strong> <span class="badge bg-info text-dark">{{ stats.shutouts_given }}</span>
                 </p>
                 <p class="mb-1">
-                    <strong>Received:</strong> <span class="badge bg-danger">{{ stats.shutouts_received }}</span>
+                    <strong>Received:</strong> <span class="badge bg-danger text-white">{{ stats.shutouts_received }}</span>
                 </p>
             </div>
         </div>
@@ -112,11 +112,11 @@
                 <h6 class="card-title">Cake Balance</h6>
                 <p class="mb-1">
                     <strong>Cakes owed to {{ stats.player.name }}:</strong>
-                    <span class="badge bg-success">{{ stats.cakes_owed_to_player }}</span>
+                    <span class="badge bg-success text-white">{{ stats.cakes_owed_to_player }}</span>
                 </p>
                 <p class="mb-1">
                     <strong>Cakes {{ stats.player.name }} owes:</strong>
-                    <span class="badge bg-danger">{{ stats.cakes_player_owes }}</span>
+                    <span class="badge bg-danger text-white">{{ stats.cakes_player_owes }}</span>
                 </p>
                 <p class="mb-0 mt-2">
                     <strong>Net Balance:</strong>

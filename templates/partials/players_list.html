@@ -14,6 +14,11 @@
         </tbody>
     </table>
 </div>
+
+{% set hx_get = url_for('get_players') %}
+{% set hx_target = '#players-list' %}
+{% include 'partials/pagination.html' %}
+
 {% else %}
 <p class="text-muted">No players added yet. Add your first player above!</p>
 {% endif %}
