@@ -48,12 +48,7 @@ class Game(db.Model):
 
     @property
     def is_shutout(self):
-        return (
-            self.team1_score == 10
-            and self.team2_score == 0
-            or self.team1_score == 0
-            and self.team2_score == 10
-        )
+        return abs(self.team1_score - self.team2_score) >= 10
 
     def __repr__(self):
         return f"<Game {self.team1_score}-{self.team2_score} ({self.game_type})>"
@@ -175,12 +170,10 @@ def get_cake_balances():
 def get_quick_stats():
     total_players = Player.query.count()
     total_games = Game.query.count()
-    total_shutouts = Game.query.filter(
-        db.or_(
-            db.and_(Game.team1_score == 10, Game.team2_score == 0),
-            db.and_(Game.team1_score == 0, Game.team2_score == 10),
-        )
-    ).count()
+
+    # Count shutouts (10-point difference)
+    all_games = Game.query.all()
+    total_shutouts = sum(1 for game in all_games if game.is_shutout)
 
     stats = {
         "total_players": total_players,
@@ -314,6 +307,23 @@ def add_game():
         team1_score = int(request.form.get("team1_score"))
         team2_score = int(request.form.get("team2_score"))
 
+        # Validate score ranges
+        if team1_score < 0 or team2_score < 0:
+            return (
+                '<div class="alert alert-danger">Scores cannot be negative!</div>',
+                200,
+            )
+
+        if team1_score > 11 or team2_score > 11:
+            return '<div class="alert alert-danger">Maximum score is 11!</div>', 200
+
+        # Validate that it's not a draw
+        if team1_score == team2_score:
+            return (
+                '<div class="alert alert-danger">Draw games are not allowed. One team must win!</div>',
+                200,
+            )
+
         # Create game
         game = Game(
             game_type=game_type,
@@ -328,6 +338,14 @@ def add_game():
         # Add players to teams
         team1_players = request.form.getlist("team1_players")
         team2_players = request.form.getlist("team2_players")
+
+        # Validate that no player appears on both teams
+        team1_ids = [int(p) for p in team1_players if p]
+        team2_ids = [int(p) for p in team2_players if p]
+
+        duplicate_players = set(team1_ids) & set(team2_ids)
+        if duplicate_players:
+            return '<div class="alert alert-danger">A player cannot play against themselves!</div>', 200
 
         # Determine winners
         team1_wins = team1_score > team2_score
@@ -364,7 +382,7 @@ def add_game():
 
     except Exception as e:
         db.session.rollback()
-        return f'<div class="alert alert-danger">Error: {str(e)}</div>', 400
+        return f'<div class="alert alert-danger">Error: {str(e)}</div>', 200
 
 
 def update_cake_balance(game):

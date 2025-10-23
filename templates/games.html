@@ -42,13 +42,13 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="team1Score" class="form-label">Team 1 Score</label>
-                                <input type="number" class="form-control" id="team1Score" name="team1_score" min="0" max="10" required>
+                                <input type="number" class="form-control" id="team1Score" name="team1_score" min="0" max="11" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="team2Score" class="form-label">Team 2 Score</label>
-                                <input type="number" class="form-control" id="team2Score" name="team2_score" min="0" max="10" required>
+                                <input type="number" class="form-control" id="team2Score" name="team2_score" min="0" max="11" required>
                             </div>
                         </div>
                     </div>
@@ -66,8 +66,8 @@
             </div>
             <div class="card-body">
                 <ul class="list-unstyled">
-                    <li><strong>🏆 Scoring:</strong> Games are played to 10 points</li>
-                    <li><strong>🎂 Cake Rule:</strong> 10-0 shutouts earn the winner a cake!</li>
+                    <li><strong>🏆 Scoring:</strong> Games are played to 11 points</li>
+                    <li><strong>🎂 Cake Rule:</strong> Shutouts (10-point difference) earn the winner a cake!</li>
                     <li><strong>⏱️ Duration:</strong> Track start/end times for statistics</li>
                     <li><strong>🎮 Game Types:</strong> 1v1, 2v2, or 2v1 matches</li>
                 </ul>
@@ -94,20 +94,26 @@
 </div>
 
 <script>
-document.body.addEventListener('htmx:afterRequest', function(evt) {
-    if (evt.detail.xhr.status === 201 && evt.target.id === 'game-form') {
-        evt.target.reset();
-        document.getElementById('team-selection').innerHTML = '';
-    }
-});
-
-// Set default times to now
-document.addEventListener('DOMContentLoaded', function() {
+function setCurrentTime() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const isoString = now.toISOString().slice(0, 16);
     document.getElementById('startTime').value = isoString;
     document.getElementById('endTime').value = isoString;
+}
+
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.xhr.status === 201 && evt.target.id === 'game-form') {
+        evt.target.reset();
+        document.getElementById('team-selection').innerHTML = '';
+        // Reset times to current time after form reset
+        setCurrentTime();
+    }
+});
+
+// Set default times to now on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setCurrentTime();
 });
 </script>
 {% endblock %}
