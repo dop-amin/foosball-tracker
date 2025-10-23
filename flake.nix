@@ -159,7 +159,7 @@
                 Type = "simple";
                 User = cfg.user;
                 Group = cfg.group;
-                WorkingDirectory = "${cfg.package}/share/foosball-tracker";
+                WorkingDirectory = cfg.dataDir;
                 StateDirectory = "foosball-tracker";
                 StateDirectoryMode = "0750";
 
