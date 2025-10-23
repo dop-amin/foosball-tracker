@@ -48,7 +48,7 @@
                     {% if stat.goal_difference > 0 %}+{% endif %}{{ stat.goal_difference }}
                 </td>
                 <td>
-                    <span class="badge bg-info text-dark">{{ stat.shutouts_given }}</span> /
+                    <span class="badge bg-success text-white">{{ stat.shutouts_given }}</span> /
                     <span class="badge bg-danger text-white">{{ stat.shutouts_received }}</span>
                 </td>
             </tr>
@@ -63,7 +63,7 @@
 
 <small class="text-muted">
     <strong>Legend:</strong> +/- = Goal difference,
-    Shutouts: <span class="badge bg-info text-dark">Given</span> / <span class="badge bg-danger text-white">Received</span>
+    Shutouts: <span class="badge bg-success text-white">Given</span> / <span class="badge bg-danger text-white">Received</span>
 </small>
 {% else %}
 <p class="text-muted">No games played yet. Play some games to see the leaderboard!</p>
