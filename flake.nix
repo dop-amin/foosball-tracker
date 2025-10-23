@@ -172,7 +172,9 @@
 
                 # Environment variables
                 Environment = [
-                  "DATABASE_PATH=${cfg.dataDir}/foosball.db" ];
+                  "DATABASE_PATH=sqlite:///${cfg.dataDir}/foosball.db"
+                  "FLASK_APP=${cfg.package}/share/foosball-tracker/app.py"
+                ];
 
                 ExecStartPre = pkgs.writeShellScript "foosball-tracker-pre" ''
                   # Run database migrations
