@@ -10,8 +10,16 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        python = pkgs.python311;
+        python = pkgs.python3;
         pythonPackages = python.pkgs;
+
+        # Python environment with all dependencies
+        pythonEnv = python.withPackages (ps: with ps; [
+          flask
+          flask-sqlalchemy
+          flask-migrate
+          python-dateutil
+        ]);
 
         foosball-tracker = pythonPackages.buildPythonApplication {
           pname = "foosball-tracker";
@@ -43,15 +51,32 @@
             rm -rf $out/share/foosball-tracker/.git
             rm -rf $out/share/foosball-tracker/instance
 
-            # Create wrapper script
+            # Create wrapper scripts
             cat > $out/bin/foosball-tracker <<EOF
             #!${pkgs.bash}/bin/bash
             cd $out/share/foosball-tracker
-            ${python}/bin/python -m flask db upgrade
-            ${python}/bin/python recalculate_elo.py
-            exec ${python}/bin/python app.py "\$@"
+            ${pythonEnv}/bin/python -m flask db upgrade
+            ${pythonEnv}/bin/python recalculate_elo.py
+            exec ${pythonEnv}/bin/python app.py "\$@"
             EOF
             chmod +x $out/bin/foosball-tracker
+
+            # Migration script for systemd
+            cat > $out/bin/foosball-tracker-migrate <<EOF
+            #!${pkgs.bash}/bin/bash
+            cd $out/share/foosball-tracker
+            ${pythonEnv}/bin/python -m flask db upgrade
+            ${pythonEnv}/bin/python recalculate_elo.py
+            EOF
+            chmod +x $out/bin/foosball-tracker-migrate
+
+            # Run script for systemd
+            cat > $out/bin/foosball-tracker-run <<EOF
+            #!${pkgs.bash}/bin/bash
+            cd $out/share/foosball-tracker
+            exec ${pythonEnv}/bin/python app.py "\$@"
+            EOF
+            chmod +x $out/bin/foosball-tracker-run
           '';
 
           meta = with pkgs.lib; {
@@ -168,13 +193,10 @@
 
                   # Run database migrations
                   cd ${cfg.package}/share/foosball-tracker
-                  ${pkgs.python311}/bin/python -m flask db upgrade
-
-                  # Recalculate ELO ratings
-                  ${pkgs.python311}/bin/python ${cfg.package}/share/foosball-tracker/recalculate_elo.py
+                  ${cfg.package}/bin/foosball-tracker-migrate
                 '';
 
-                ExecStart = "${pkgs.python311}/bin/python ${cfg.package}/share/foosball-tracker/app.py";
+                ExecStart = "${cfg.package}/bin/foosball-tracker-run";
 
                 Restart = "on-failure";
                 RestartSec = "5s";
