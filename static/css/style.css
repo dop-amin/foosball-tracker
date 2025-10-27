@@ -93,16 +93,27 @@
     height: 2rem;
 }
 
+/* Hide number input spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
 /* Responsive improvements */
 @media (max-width: 768px) {
     .jumbotron h1 {
         font-size: 2rem;
     }
-    
+
     .stats-number {
         font-size: 2rem;
     }
-    
+
     .d-flex.gap-3 {
         flex-direction: column;
         gap: 1rem !important;

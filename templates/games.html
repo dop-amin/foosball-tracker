@@ -42,13 +42,21 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="team1Score" class="form-label">Team 1 Score</label>
-                                <input type="number" class="form-control" id="team1Score" name="team1_score" min="0" max="11" required>
+                                <div class="input-group input-group-lg">
+                                    <input type="number" class="form-control text-center" id="team1Score" name="team1_score" min="0" max="11" value="0" required>
+                                    <button class="btn btn-outline-danger score-btn" type="button" onclick="decrementScore('team1Score')">−</button>
+                                    <button class="btn btn-outline-success score-btn" type="button" onclick="incrementScore('team1Score')">+</button>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="team2Score" class="form-label">Team 2 Score</label>
-                                <input type="number" class="form-control" id="team2Score" name="team2_score" min="0" max="11" required>
+                                <div class="input-group input-group-lg">
+                                    <input type="number" class="form-control text-center" id="team2Score" name="team2_score" min="0" max="11" value="0" required>
+                                    <button class="btn btn-outline-danger score-btn" type="button" onclick="decrementScore('team2Score')">−</button>
+                                    <button class="btn btn-outline-success score-btn" type="button" onclick="incrementScore('team2Score')">+</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -102,12 +110,33 @@ function setCurrentTime() {
     document.getElementById('endTime').value = isoString;
 }
 
+function incrementScore(inputId) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const maxValue = parseInt(input.max) || 11;
+    if (currentValue < maxValue) {
+        input.value = currentValue + 1;
+    }
+}
+
+function decrementScore(inputId) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const minValue = parseInt(input.min) || 0;
+    if (currentValue > minValue) {
+        input.value = currentValue - 1;
+    }
+}
+
 document.body.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail.xhr.status === 201 && evt.target.id === 'game-form') {
         evt.target.reset();
         document.getElementById('team-selection').innerHTML = '';
         // Reset times to current time after form reset
         setCurrentTime();
+        // Reset scores to 0
+        document.getElementById('team1Score').value = 0;
+        document.getElementById('team2Score').value = 0;
     }
 });
 
