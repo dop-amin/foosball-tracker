@@ -848,7 +848,7 @@ def get_chart_data():
         "win_rates": win_rates,
     }
 
-    return f"<script>createCharts({json.dumps(chart_data)});</script>"
+    return render_template("partials/chart_script.html", chart_data=chart_data)
 
 
 @app.route("/api/detailed-stats")

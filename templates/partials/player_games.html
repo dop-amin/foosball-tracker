@@ -25,14 +25,14 @@
                 </td>
                 <td>
                     <div class="small">
-                        <strong>Team 1:</strong>
+                        <strong>Black Side:</strong>
                         {% for gp in game.players if gp.team == 1 %}
                             <span class="{% if gp.is_winner %}text-success{% endif %} {% if gp.player_id == player.id %}text-decoration-underline{% endif %}">
                                 {{ gp.player.name }}
                             </span>{% if not loop.last %}, {% endif %}
                         {% endfor %}
                         <br>
-                        <strong>Team 2:</strong>
+                        <strong>White Side:</strong>
                         {% for gp in game.players if gp.team == 2 %}
                             <span class="{% if gp.is_winner %}text-success{% endif %} {% if gp.player_id == player.id %}text-decoration-underline{% endif %}">
                                 {{ gp.player.name }}

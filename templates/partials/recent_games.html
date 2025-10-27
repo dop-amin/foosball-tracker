@@ -18,12 +18,12 @@
                 <td><strong>{{ game.team1_score }}-{{ game.team2_score }}</strong></td>
                 <td>
                     <small>
-                        Team 1:
+                        Black Side:
                         {% for gp in game.players if gp.team == 1 %}
                             {{ gp.player.name }}{% if not loop.last %}, {% endif %}
                         {% endfor %}
                         <br>
-                        Team 2:
+                        White Side:
                         {% for gp in game.players if gp.team == 2 %}
                             {{ gp.player.name }}{% if not loop.last %}, {% endif %}
                         {% endfor %}
