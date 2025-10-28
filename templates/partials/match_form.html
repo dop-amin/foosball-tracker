@@ -13,12 +13,22 @@
 
             <div class="mb-2">
                 <label class="form-label small">Black Side: {{ match.player1.name }} Score</label>
-                <input type="number" class="form-control form-control-sm" name="team1_score" min="0" max="11" required>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control text-center" id="match-team1-score-{{ match.id }}" name="team1_score" min="0" max="11" value="0" required>
+                    <button class="btn btn-outline-danger" type="button" onclick="decrementMatchScore('match-team1-score-{{ match.id }}')">−</button>
+                    <button class="btn btn-outline-success" type="button" onclick="incrementMatchScore('match-team1-score-{{ match.id }}')">+</button>
+                    <button class="btn btn-outline-primary" type="button" onclick="incrementMatchScoreBy('match-team1-score-{{ match.id }}', 10)">+10</button>
+                </div>
             </div>
 
             <div class="mb-3">
                 <label class="form-label small">White Side: {{ match.player2.name }} Score</label>
-                <input type="number" class="form-control form-control-sm" name="team2_score" min="0" max="11" required>
+                <div class="input-group input-group-sm">
+                    <input type="number" class="form-control text-center" id="match-team2-score-{{ match.id }}" name="team2_score" min="0" max="11" value="0" required>
+                    <button class="btn btn-outline-danger" type="button" onclick="decrementMatchScore('match-team2-score-{{ match.id }}')">−</button>
+                    <button class="btn btn-outline-success" type="button" onclick="incrementMatchScore('match-team2-score-{{ match.id }}')">+</button>
+                    <button class="btn btn-outline-primary" type="button" onclick="incrementMatchScoreBy('match-team2-score-{{ match.id }}', 10)">+10</button>
+                </div>
             </div>
 
             <div class="d-flex gap-2">
@@ -32,3 +42,31 @@
         </div>
     </form>
 </div>
+
+<script>
+function incrementMatchScore(inputId) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const maxValue = parseInt(input.max) || 11;
+    if (currentValue < maxValue) {
+        input.value = currentValue + 1;
+    }
+}
+
+function decrementMatchScore(inputId) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const minValue = parseInt(input.min) || 0;
+    if (currentValue > minValue) {
+        input.value = currentValue - 1;
+    }
+}
+
+function incrementMatchScoreBy(inputId, amount) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const maxValue = parseInt(input.max) || 11;
+    const newValue = currentValue + amount;
+    input.value = Math.min(newValue, maxValue);
+}
+</script>

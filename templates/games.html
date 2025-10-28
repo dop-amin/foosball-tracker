@@ -46,6 +46,7 @@
                                     <input type="number" class="form-control text-center" id="team1Score" name="team1_score" min="0" max="11" value="0" required>
                                     <button class="btn btn-outline-danger score-btn" type="button" onclick="decrementScore('team1Score')">−</button>
                                     <button class="btn btn-outline-success score-btn" type="button" onclick="incrementScore('team1Score')">+</button>
+                                    <button class="btn btn-outline-primary score-btn" type="button" onclick="incrementScoreBy('team1Score', 10)">+10</button>
                                 </div>
                             </div>
                         </div>
@@ -56,6 +57,7 @@
                                     <input type="number" class="form-control text-center" id="team2Score" name="team2_score" min="0" max="11" value="0" required>
                                     <button class="btn btn-outline-danger score-btn" type="button" onclick="decrementScore('team2Score')">−</button>
                                     <button class="btn btn-outline-success score-btn" type="button" onclick="incrementScore('team2Score')">+</button>
+                                    <button class="btn btn-outline-primary score-btn" type="button" onclick="incrementScoreBy('team2Score', 10)">+10</button>
                                 </div>
                             </div>
                         </div>
@@ -126,6 +128,14 @@ function decrementScore(inputId) {
     if (currentValue > minValue) {
         input.value = currentValue - 1;
     }
+}
+
+function incrementScoreBy(inputId, amount) {
+    const input = document.getElementById(inputId);
+    const currentValue = parseInt(input.value) || 0;
+    const maxValue = parseInt(input.max) || 11;
+    const newValue = currentValue + amount;
+    input.value = Math.min(newValue, maxValue);
 }
 
 document.body.addEventListener('htmx:afterRequest', function(evt) {
