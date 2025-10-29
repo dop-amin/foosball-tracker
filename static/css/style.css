@@ -122,6 +122,18 @@ input[type="number"] {
     font-size: 1em;
 }
 
+/* Compact icon-only badge style */
+.achievement-badge-icon {
+    font-size: 1.25rem;
+    cursor: help;
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+.achievement-badge-icon:hover {
+    transform: scale(1.2);
+}
+
 /* Badge color overrides for better contrast */
 .badge.bg-light {
     color: #212529;

@@ -5,7 +5,7 @@
             <tr>
                 <th>Rank</th>
                 <th>Player</th>
-                <th>Badges</th>
+                <th style="width: 120px;">Badges</th>
                 <th>ELO Rating</th>
                 <th>Games</th>
                 <th>W-L</th>
@@ -29,13 +29,13 @@
                     </strong>
                 </td>
                 <td><strong><a href="{{ url_for('player_detail', player_id=stat.player.id) }}" class="text-decoration-none text-dark">{{ stat.player.name }}</a></strong></td>
-                <td>
+                <td style="max-width: 120px;">
                     <div class="d-flex flex-wrap gap-1">
                         {% for badge in stat.badges %}
-                        <span class="badge bg-{{ badge.color }} achievement-badge"
+                        <span class="achievement-badge-icon"
                               data-bs-toggle="tooltip"
                               data-bs-placement="top"
-                              title="{{ badge.tooltip }}">{{ badge.emoji }} {{ badge.label }}</span>
+                              title="{{ badge.label }}: {{ badge.tooltip }}">{{ badge.emoji }}</span>
                         {% endfor %}
                     </div>
                 </td>
