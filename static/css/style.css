@@ -104,6 +104,31 @@ input[type="number"] {
     -moz-appearance: textfield;
 }
 
+/* Achievement Badge Styles */
+.achievement-badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
+    font-weight: 600;
+    white-space: nowrap;
+    margin: 0.1rem;
+    border-radius: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.achievement-badge .emoji {
+    font-size: 1em;
+}
+
+/* Badge color overrides for better contrast */
+.badge.bg-light {
+    color: #212529;
+    background-color: #f8f9fa !important;
+    border: 1px solid #dee2e6;
+}
+
 /* Responsive improvements */
 @media (max-width: 768px) {
     .jumbotron h1 {

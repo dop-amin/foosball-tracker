@@ -48,4 +48,15 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Initialize tooltips when content is loaded dynamically via htmx
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        // Initialize Bootstrap tooltips for any new content
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% endblock %}
