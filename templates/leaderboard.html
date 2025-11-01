@@ -19,6 +19,19 @@
 </div>
 
 <div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>📈 Position History</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="positionChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
@@ -58,5 +71,118 @@
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
+
+    // Plugin to draw labels at the end of each line
+    const endLabelsPlugin = {
+        id: 'endLabels',
+        afterDatasetsDraw(chart) {
+            const ctx = chart.ctx;
+            chart.data.datasets.forEach((dataset, datasetIndex) => {
+                const meta = chart.getDatasetMeta(datasetIndex);
+                if (!meta.hidden && dataset.data.length > 0) {
+                    // Find the last non-null point
+                    let lastPoint = null;
+                    let lastValue = null;
+                    for (let i = dataset.data.length - 1; i >= 0; i--) {
+                        if (dataset.data[i] !== null) {
+                            lastPoint = meta.data[i];
+                            lastValue = dataset.data[i];
+                            break;
+                        }
+                    }
+
+                    if (lastPoint) {
+                        ctx.save();
+                        ctx.fillStyle = dataset.borderColor;
+                        ctx.font = 'bold 12px sans-serif';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+
+                        const x = lastPoint.x + 8;
+                        const y = lastPoint.y;
+                        const label = dataset.label;
+
+                        // Draw text with white outline for better readability
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 3;
+                        ctx.strokeText(label, x, y);
+                        ctx.fillText(label, x, y);
+
+                        ctx.restore();
+                    }
+                }
+            });
+        }
+    };
+
+    // Load and render position chart
+    fetch('/api/leaderboard-position-chart')
+        .then(response => response.json())
+        .then(data => {
+            const ctx = document.getElementById('positionChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: data.datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    layout: {
+                        padding: {
+                            right: 100  // Add padding for labels
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Leaderboard Position Over Time'
+                        },
+                        legend: {
+                            display: false  // Hide legend since we have inline labels
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    return context.dataset.label + ': Rank #' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: true,  // Rank 1 at top
+                            beginAtZero: false,
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return '#' + value;
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Rank'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                },
+                plugins: [endLabelsPlugin]
+            });
+        })
+        .catch(error => {
+            console.error('Error loading position chart:', error);
+            document.getElementById('positionChart').parentElement.innerHTML =
+                '<p class="text-muted text-center">No position history data available yet. Play some games to see your position history!</p>';
+        });
 </script>
 {% endblock %}

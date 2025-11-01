@@ -84,6 +84,24 @@ class CakeBalance(db.Model):
         return f"<CakeBalance {self.debtor.name} owes {self.creditor.name}: {self.balance}>"
 
 
+class LeaderboardHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    snapshot_date = db.Column(db.Date, nullable=False)
+    rank = db.Column(db.Integer, nullable=False)
+    elo_rating = db.Column(db.Integer, nullable=False)
+    total_games = db.Column(db.Integer, nullable=False)
+
+    player = db.relationship("Player")
+
+    __table_args__ = (
+        db.UniqueConstraint("player_id", "snapshot_date", name="unique_player_date"),
+    )
+
+    def __repr__(self):
+        return f"<LeaderboardHistory {self.player.name} rank {self.rank} on {self.snapshot_date}>"
+
+
 class Tournament(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
@@ -340,6 +358,157 @@ def recalculate_all_elo_ratings():
     db.session.commit()
 
 
+def create_daily_snapshot(snapshot_date=None):
+    """
+    Create a daily snapshot of the leaderboard for all players.
+    Stores each player's rank, ELO rating, and total games count.
+
+    Args:
+        snapshot_date: Date to create snapshot for (defaults to today)
+    """
+    from datetime import date
+
+    if snapshot_date is None:
+        snapshot_date = date.today()
+
+    # Calculate current leaderboard statistics
+    players_stats = []
+    players = Player.query.all()
+
+    for player in players:
+        total_games = GamePlayer.query.filter_by(player_id=player.id).count()
+
+        # Only include players who have played at least one game
+        if total_games > 0:
+            players_stats.append({
+                "player_id": player.id,
+                "elo_rating": player.elo_rating,
+                "total_games": total_games,
+            })
+
+    # Sort by ELO rating (highest first) to determine ranks
+    players_stats.sort(key=lambda x: x["elo_rating"], reverse=True)
+
+    # Store snapshots for each player
+    for rank, player_stat in enumerate(players_stats, start=1):
+        # Check if snapshot already exists
+        existing = LeaderboardHistory.query.filter_by(
+            player_id=player_stat["player_id"],
+            snapshot_date=snapshot_date
+        ).first()
+
+        if existing:
+            # Update existing snapshot
+            existing.rank = rank
+            existing.elo_rating = player_stat["elo_rating"]
+            existing.total_games = player_stat["total_games"]
+        else:
+            # Create new snapshot
+            snapshot = LeaderboardHistory(
+                player_id=player_stat["player_id"],
+                snapshot_date=snapshot_date,
+                rank=rank,
+                elo_rating=player_stat["elo_rating"],
+                total_games=player_stat["total_games"]
+            )
+            db.session.add(snapshot)
+
+    db.session.commit()
+
+
+def recalculate_historical_snapshots():
+    """
+    Recalculate all historical leaderboard snapshots from game history.
+    Clears existing snapshots and rebuilds them by replaying all games.
+    Creates one snapshot per day where games were played.
+    """
+    from datetime import date, timedelta
+    from collections import defaultdict
+
+    # Clear existing snapshots
+    LeaderboardHistory.query.delete()
+
+    # Reset all player ratings to 1500
+    players = Player.query.all()
+    player_elo = {player.id: 1500 for player in players}
+    player_games_count = {player.id: 0 for player in players}
+
+    # Get all games in chronological order
+    games = Game.query.order_by(Game.start_time).all()
+
+    if not games:
+        db.session.commit()
+        return
+
+    # Group games by date
+    games_by_date = defaultdict(list)
+    for game in games:
+        game_date = game.start_time.date()
+        games_by_date[game_date].append(game)
+
+    # Process games chronologically by date
+    sorted_dates = sorted(games_by_date.keys())
+
+    for game_date in sorted_dates:
+        # Process all games for this date
+        for game in games_by_date[game_date]:
+            # Get team players
+            team1_players = []
+            team2_players = []
+
+            for gp in game.players:
+                if gp.team == 1:
+                    team1_players.append(gp.player_id)
+                else:
+                    team2_players.append(gp.player_id)
+
+                # Increment games count
+                player_games_count[gp.player_id] = player_games_count.get(gp.player_id, 0) + 1
+
+            # Calculate average team ratings
+            team1_avg_rating = sum(player_elo[pid] for pid in team1_players) / len(team1_players)
+            team2_avg_rating = sum(player_elo[pid] for pid in team2_players) / len(team2_players)
+
+            # Calculate ELO changes
+            team1_change, team2_change = calculate_elo_change(
+                team1_avg_rating, team2_avg_rating, game.team1_score, game.team2_score
+            )
+
+            # Update player ELO ratings in memory
+            for pid in team1_players:
+                player_elo[pid] += team1_change
+
+            for pid in team2_players:
+                player_elo[pid] += team2_change
+
+        # Create snapshot for this date (after all games for the day)
+        players_stats = []
+        for player_id, elo_rating in player_elo.items():
+            games_count = player_games_count.get(player_id, 0)
+            if games_count > 0:  # Only include players with games
+                players_stats.append({
+                    "player_id": player_id,
+                    "elo_rating": elo_rating,
+                    "total_games": games_count,
+                })
+
+        # Sort by ELO to determine ranks
+        players_stats.sort(key=lambda x: x["elo_rating"], reverse=True)
+
+        # Store snapshots
+        for rank, player_stat in enumerate(players_stats, start=1):
+            snapshot = LeaderboardHistory(
+                player_id=player_stat["player_id"],
+                snapshot_date=game_date,
+                rank=rank,
+                elo_rating=player_stat["elo_rating"],
+                total_games=player_stat["total_games"]
+            )
+            db.session.add(snapshot)
+
+    db.session.commit()
+
+
 @app.route("/api/games", methods=["POST"])
 def add_game():
     from dateutil.parser import parse
@@ -431,6 +600,14 @@ def add_game():
         update_elo_ratings(game)
 
         db.session.commit()
+
+        # Create daily snapshot after committing the game
+        try:
+            create_daily_snapshot()
+        except Exception as snapshot_error:
+            # Log error but don't fail the game creation
+            print(f"Warning: Failed to create daily snapshot: {snapshot_error}")
+
         return '<div class="alert alert-success">Game recorded successfully!</div>', 201
 
     except Exception as e:
@@ -994,6 +1171,99 @@ def get_chart_data():
     return render_template("partials/chart_script.html", chart_data=chart_data)
 
 
+@app.route("/api/leaderboard-position-chart")
+def get_leaderboard_position_chart():
+    """
+    Return data for leaderboard position chart showing all players' ranks over time.
+    Returns JSON data for Chart.js line chart.
+    """
+    from collections import defaultdict
+
+    # Get all snapshots ordered by date
+    snapshots = LeaderboardHistory.query.order_by(LeaderboardHistory.snapshot_date).all()
+
+    if not snapshots:
+        return jsonify({"dates": [], "datasets": []})
+
+    # Organize data by player
+    player_data = defaultdict(lambda: {"name": "", "ranks": [], "dates": []})
+
+    for snapshot in snapshots:
+        player_id = snapshot.player_id
+        if not player_data[player_id]["name"]:
+            player_data[player_id]["name"] = snapshot.player.name
+
+        player_data[player_id]["dates"].append(snapshot.snapshot_date.strftime("%Y-%m-%d"))
+        player_data[player_id]["ranks"].append(snapshot.rank)
+
+    # Get all unique dates (sorted)
+    all_dates = sorted(set(snapshot.snapshot_date for snapshot in snapshots))
+    date_strings = [d.strftime("%Y-%m-%d") for d in all_dates]
+
+    # Build datasets for each player
+    datasets = []
+    colors = [
+        "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF",
+        "#FF9F40", "#FF6384", "#C9CBCF", "#4BC0C0", "#FF6384"
+    ]
+
+    for idx, (player_id, data) in enumerate(player_data.items()):
+        # Create a date-to-rank mapping for this player
+        date_rank_map = dict(zip(data["dates"], data["ranks"]))
+
+        # Fill in ranks for all dates (null if player didn't have data that day)
+        ranks_by_date = []
+        for date_str in date_strings:
+            ranks_by_date.append(date_rank_map.get(date_str, None))
+
+        datasets.append({
+            "label": data["name"],
+            "data": ranks_by_date,
+            "borderColor": colors[idx % len(colors)],
+            "backgroundColor": colors[idx % len(colors)] + "33",  # Add transparency
+            "tension": 0.1,
+            "spanGaps": True  # Connect lines even with null values
+        })
+
+    return jsonify({
+        "dates": date_strings,
+        "datasets": datasets
+    })
+
+
+@app.route("/api/players/<int:player_id>/position-history")
+def get_player_position_history(player_id):
+    """
+    Return position history data for a single player.
+    Returns JSON data for Chart.js line chart.
+    """
+    player = Player.query.get_or_404(player_id)
+
+    # Get all snapshots for this player
+    snapshots = LeaderboardHistory.query.filter_by(
+        player_id=player_id
+    ).order_by(LeaderboardHistory.snapshot_date).all()
+
+    if not snapshots:
+        return jsonify({
+            "dates": [],
+            "ranks": [],
+            "elo_ratings": [],
+            "player_name": player.name
+        })
+
+    dates = [s.snapshot_date.strftime("%Y-%m-%d") for s in snapshots]
+    ranks = [s.rank for s in snapshots]
+    elo_ratings = [s.elo_rating for s in snapshots]
+
+    return jsonify({
+        "dates": dates,
+        "ranks": ranks,
+        "elo_ratings": elo_ratings,
+        "player_name": player.name
+    })
+
+
 @app.route("/api/detailed-stats")
 def get_detailed_stats():
     # Calculate various detailed statistics
@@ -1401,6 +1671,13 @@ def record_tournament_match(tournament_id, match_id):
 
     # Commit the transaction first to ensure all changes are saved
     db.session.commit()
+
+    # Create daily snapshot after committing the game
+    try:
+        create_daily_snapshot()
+    except Exception as snapshot_error:
+        # Log error but don't fail the tournament match creation
+        print(f"Warning: Failed to create daily snapshot: {snapshot_error}")
 
     # Check if tournament is complete (must be after commit)
     finals = TournamentMatch.query.filter_by(

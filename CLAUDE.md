@@ -45,10 +45,14 @@ flask db upgrade
 flask db downgrade
 ```
 
-**Important**: After any migration that affects player ratings or game history, run the ELO recalculation script to ensure consistency:
+**Important**: After any migration that affects player ratings or game history, run the ELO recalculation script to ensure consistency. This script also regenerates historical leaderboard snapshots:
 ```bash
 python recalculate_elo.py
 ```
+
+This script performs two operations:
+1. Recalculates all ELO ratings from scratch by replaying games chronologically
+2. Regenerates historical leaderboard snapshots for position tracking over time
 
 ## Architecture
 
@@ -76,6 +80,14 @@ python recalculate_elo.py
 - ELO change for this specific game (nullable integer)
 
 **CakeBalance** (app.py:75-85): Tracks cake debts between players (10-0 shutout rule: losers owe winners a cake)
+
+**LeaderboardHistory** (app.py:87-102): Stores daily snapshots of leaderboard positions for historical tracking with:
+- Player ID reference
+- Snapshot date (one per day)
+- Rank (leaderboard position on that date)
+- ELO rating at that point
+- Total games played at that point
+- Unique constraint on (player_id, snapshot_date)
 
 ### Routing Pattern
 

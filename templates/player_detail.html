@@ -28,6 +28,19 @@
     <div class="col-md-12">
         <div class="card">
             <div class="card-header">
+                <h5>📈 Position History</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="playerPositionChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
                 <h5>Game History</h5>
             </div>
             <div class="card-body" id="player-games" hx-get="/api/players/{{ player.id }}/games" hx-trigger="load">
@@ -40,4 +53,98 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Load and render player position chart
+    fetch('/api/players/{{ player.id }}/position-history')
+        .then(response => response.json())
+        .then(data => {
+            const ctx = document.getElementById('playerPositionChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: 'Rank',
+                        data: data.ranks,
+                        borderColor: '#36A2EB',
+                        backgroundColor: '#36A2EB33',
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'ELO Rating',
+                        data: data.elo_ratings,
+                        borderColor: '#FF6384',
+                        backgroundColor: '#FF638433',
+                        tension: 0.1,
+                        yAxisID: 'y1',
+                        hidden: true  // Hidden by default
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: data.player_name + ' - Position & ELO History'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.dataset.label === 'Rank') {
+                                        return 'Rank: #' + context.parsed.y;
+                                    } else {
+                                        return 'ELO: ' + context.parsed.y;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: true,  // Rank 1 at top
+                            beginAtZero: false,
+                            position: 'left',
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    return '#' + value;
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Rank'
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'ELO Rating'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error loading position chart:', error);
+            document.getElementById('playerPositionChart').parentElement.innerHTML =
+                '<p class="text-muted text-center">No position history data available yet. Play some games to see your position history!</p>';
+        });
+</script>
 {% endblock %}
