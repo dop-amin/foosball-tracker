@@ -28,7 +28,7 @@
                         {% endif %}
                     </strong>
                 </td>
-                <td><strong><a href="{{ url_for('player_detail', player_id=stat.player.id) }}" class="text-decoration-none text-dark">{{ stat.player.name }}</a></strong></td>
+                <td><strong><a href="{{ url_for('pages.player_detail', player_id=stat.player.id) }}" class="text-decoration-none text-dark">{{ stat.player.name }}</a></strong></td>
                 <td style="max-width: 120px;">
                     <div class="d-flex flex-wrap gap-1">
                         {% for badge in stat.badges %}
@@ -68,7 +68,7 @@
     </table>
 </div>
 
-{% set hx_get = url_for('get_leaderboard') %}
+{% set hx_get = url_for('leaderboard.get_leaderboard') %}
 {% set hx_target = '#leaderboard-content' %}
 {% include 'partials/pagination.html' %}
 

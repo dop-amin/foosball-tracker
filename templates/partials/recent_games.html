@@ -48,8 +48,8 @@
             {% endfor %}
         </tbody>
     </table>
-    <a href="{{ url_for('games') }}" class="btn btn-sm btn-outline-primary">View All Games</a>
+    <a href="{{ url_for('pages.games') }}" class="btn btn-sm btn-outline-primary">View All Games</a>
 </div>
 {% else %}
-<p class="text-muted">No games played yet. <a href="{{ url_for('games') }}">Record your first game!</a></p>
+<p class="text-muted">No games played yet. <a href="{{ url_for('pages.games') }}">Record your first game!</a></p>
 {% endif %}

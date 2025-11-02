@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   web:
@@ -9,5 +9,4 @@ services:
       - ./instance:/app/instance
     environment:
       - FLASK_ENV=production
-      - SECRET_KEY=${SECRET_KEY:-foosball-secret-key-change-in-production}
     restart: unless-stopped

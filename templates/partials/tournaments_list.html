@@ -1,7 +1,7 @@
 {% if tournaments %}
     <div class="list-group">
         {% for tournament in tournaments %}
-            <a href="{{ url_for('tournament_detail', tournament_id=tournament.id) }}"
+            <a href="{{ url_for('pages.tournament_detail', tournament_id=tournament.id) }}"
                class="list-group-item list-group-item-action">
                 <div class="d-flex w-100 justify-content-between">
                     <h5 class="mb-1">{{ tournament.name }}</h5>
@@ -28,7 +28,7 @@
     </div>
 
     {% if total_pages > 1 %}
-        {% set hx_get = url_for('get_tournaments') %}
+        {% set hx_get = url_for('tournaments.get_tournaments') %}
         {% set hx_target = '#tournament-list' %}
         {% include 'partials/pagination.html' %}
     {% endif %}

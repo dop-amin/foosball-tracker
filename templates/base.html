@@ -14,29 +14,29 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-success">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('index') }}">⚽ Foosball Tracker</a>
+            <a class="navbar-brand" href="{{ url_for('pages.index') }}">⚽ Foosball Tracker</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}" preload="mousedown">Home</a>
+                        <a class="nav-link" href="{{ url_for('pages.index') }}" preload="mousedown">Home</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('players') }}" preload="mousedown">Players</a>
+                        <a class="nav-link" href="{{ url_for('pages.players') }}" preload="mousedown">Players</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('games') }}" preload="mousedown">Games</a>
+                        <a class="nav-link" href="{{ url_for('pages.games') }}" preload="mousedown">Games</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('leaderboard') }}" preload="mousedown">Leaderboard</a>
+                        <a class="nav-link" href="{{ url_for('pages.leaderboard') }}" preload="mousedown">Leaderboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('tournaments') }}" preload="mousedown">Tournaments</a>
+                        <a class="nav-link" href="{{ url_for('pages.tournaments') }}" preload="mousedown">Tournaments</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('statistics') }}" preload="mousedown">Statistics</a>
+                        <a class="nav-link" href="{{ url_for('pages.statistics') }}" preload="mousedown">Statistics</a>
                     </li>
                 </ul>
             </div>

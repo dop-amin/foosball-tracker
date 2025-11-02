@@ -8,7 +8,12 @@ This script performs two operations:
 2. Populates historical leaderboard snapshots (daily position tracking)
 """
 
-from app import app, recalculate_all_elo_ratings, recalculate_historical_snapshots, LeaderboardHistory
+from app import create_app
+from models import LeaderboardHistory
+from services.elo_service import recalculate_all_elo_ratings
+from services.leaderboard_service import recalculate_historical_snapshots
+
+app = create_app()
 
 if __name__ == "__main__":
     with app.app_context():

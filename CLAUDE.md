@@ -58,30 +58,48 @@ This script performs two operations:
 
 ### Application Structure
 
-- **app.py**: Monolithic Flask application containing all models, routes, and business logic
+The application follows a modular Flask blueprint architecture:
+
+- **app.py**: Application factory and initialization (uses `create_app()` pattern)
+- **config.py**: Configuration settings (database URI, secret key, etc.)
+- **models.py**: SQLAlchemy database models (8 models)
+- **services/**: Business logic layer
+  - `elo_service.py`: ELO rating calculations
+  - `leaderboard_service.py`: Leaderboard and historical snapshot management
+  - `game_service.py`: Game recording and cake balance logic
+  - `statistics_service.py`: Statistics, streaks, and badge calculations
+  - `tournament_service.py`: Tournament bracket generation and management
+- **blueprints/**: Flask blueprints for route organization
+  - `pages.py`: Page routes (return full HTML pages)
+  - `players.py`: Player API routes
+  - `games.py`: Game API routes
+  - `leaderboard.py`: Leaderboard API routes
+  - `statistics.py`: Statistics and chart API routes
+  - `tournaments.py`: Tournament routes and API
 - **templates/**: Jinja2 templates with base layout and page-specific views
 - **templates/partials/**: HTML fragments returned by htmx API endpoints
 - **static/css/**: Custom CSS styles
 - **instance/**: SQLite database storage (auto-created, gitignored)
+- **recalculate_elo.py**: Utility script for recalculating ELO and historical data
 
-### Data Models (app.py)
+### Data Models (models.py)
 
-**Player** (app.py:18-25): Player records with name, ELO rating (default 1500), and creation timestamp
+**Player**: Player records with name, ELO rating (default 1500), and creation timestamp
 
-**Game** (app.py:28-57): Game records with:
+**Game**: Game records with:
 - Scores for both teams
 - Game type (1v1, 2v2, 2v1)
 - Start time (required) and optional end time for duration tracking
 - Computed properties: `duration_minutes`, `is_shutout`
 
-**GamePlayer** (app.py:60-72): Junction table linking players to games with:
+**GamePlayer**: Junction table linking players to games with:
 - Team assignment (1 or 2)
 - Winner status (boolean)
 - ELO change for this specific game (nullable integer)
 
-**CakeBalance** (app.py:75-85): Tracks cake debts between players (10-0 shutout rule: losers owe winners a cake)
+**CakeBalance**: Tracks cake debts between players (10-0 shutout rule: losers owe winners a cake)
 
-**LeaderboardHistory** (app.py:87-102): Stores daily snapshots of leaderboard positions for historical tracking with:
+**LeaderboardHistory**: Stores daily snapshots of leaderboard positions for historical tracking with:
 - Player ID reference
 - Snapshot date (one per day)
 - Rank (leaderboard position on that date)
@@ -89,19 +107,27 @@ This script performs two operations:
 - Total games played at that point
 - Unique constraint on (player_id, snapshot_date)
 
+**Tournament**: Tournament records with name, status (setup/active/completed), and timestamps
+
+**TournamentParticipant**: Links players to tournaments with seeding information
+
+**TournamentMatch**: Tournament bracket matches with players, winners, and game links
+
 ### Routing Pattern
 
-The application follows a dual-route pattern:
+The application uses Flask blueprints organized by feature:
 
-1. **Page Routes** (app.py:88-116): Return full HTML pages
+1. **Page Routes** (blueprints/pages.py): Return full HTML pages
    - `/` → index.html
    - `/players` → players.html
    - `/games` → games.html
    - `/leaderboard` → leaderboard.html
    - `/statistics` → statistics.html
-   - `/players/<int:player_id>` → player_detail.html (individual player page)
+   - `/tournaments` → tournaments.html
+   - `/players/<int:player_id>` → player_detail.html
+   - `/tournaments/<int:tournament_id>` → tournament_detail.html
 
-2. **API Routes** (app.py:119-840): Return HTML fragments for htmx
+2. **API Routes** (blueprints/*/): Return HTML fragments for htmx
    - All API routes start with `/api/`
    - Return partial HTML snippets that htmx swaps into the DOM
    - Use HTTP status codes (201 for created, 400 for errors)
@@ -109,28 +135,27 @@ The application follows a dual-route pattern:
 
 ### Key Business Logic
 
-**ELO Rating System** (app.py:206-290):
-- `calculate_elo_change()` (app.py:206-232): Calculates rating changes using standard ELO formula with K-factor of 32
-- `update_elo_ratings()` (app.py:235-271): Updates player ELO ratings after each game and stores the change in GamePlayer records
-- `recalculate_all_elo_ratings()` (app.py:273-290): Recalculates all ELO ratings from scratch by replaying games chronologically
+**ELO Rating System** (services/elo_service.py):
+- `calculate_elo_change()`: Calculates rating changes using standard ELO formula with K-factor of 32
+- `update_elo_ratings()`: Updates player ELO ratings after each game and stores the change in GamePlayer records
+- `recalculate_all_elo_ratings()`: Recalculates all ELO ratings from scratch by replaying games chronologically
 - Team ratings are averaged before calculation for 2v2 and 2v1 games
 - ELO changes are stored per-player per-game for historical tracking
 
-**update_cake_balance()** (app.py:366-389): Called when a shutout (10-0) occurs. Creates or increments CakeBalance records for each loser-winner pair.
+**Leaderboard Management** (services/leaderboard_service.py):
+- `create_daily_snapshot()`: Creates daily leaderboard snapshots for position tracking
+- `recalculate_historical_snapshots()`: Rebuilds all historical snapshots from game history
 
-**Leaderboard Calculation** (app.py:409-482): Computes player statistics including:
-- Win/loss records and win rate percentage
-- Goals for/against and goal difference
-- Shutouts given/received
-- Current ELO rating
-- Sorted by ELO rating (highest first)
-- Supports pagination
+**Game Management** (services/game_service.py):
+- `update_cake_balance()`: Called when a shutout (10-0) occurs. Creates or increments CakeBalance records
 
-**Chart Data Generation** (app.py:698-770): Aggregates statistics for Chart.js visualizations:
-- Games over time (last 30 days)
-- Average game duration by type
-- Game type distribution
-- Player win rates
+**Statistics & Badges** (services/statistics_service.py):
+- `calculate_player_streaks()`: Computes winning streaks for players
+- `calculate_badges()`: Awards achievement badges based on player performance
+
+**Tournament System** (services/tournament_service.py):
+- `generate_tournament_bracket()`: Creates single-elimination bracket with proper seeding
+- `advance_winner()`: Advances tournament winners to next round
 
 ## htmx Integration
 
@@ -160,7 +185,7 @@ The schema supports:
 
 ## Development Notes
 
-- Database initialization happens automatically via `db.create_all()` in the main block (app.py:843-845)
+- Database initialization happens automatically via `db.create_all()` in app.py's main block
 - ELO ratings are recalculated on startup to ensure consistency
 - Schema changes should use Flask-Migrate migrations (see Database Migrations section)
 - All date parsing uses python-dateutil for flexible date format handling
@@ -168,3 +193,6 @@ The schema supports:
 - SQLAlchemy track modifications is disabled for performance
 - When recording games, ELO ratings are updated immediately and cake balances are updated for shutouts
 - If you are returning status messages do this with HTTP status code 200
+- The application uses an application factory pattern (`create_app()`) for better testability
+- Business logic is separated into service modules in the `services/` directory
+- Routes are organized by feature using Flask blueprints in the `blueprints/` directory

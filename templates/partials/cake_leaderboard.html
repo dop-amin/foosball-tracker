@@ -48,7 +48,7 @@
     {% endif %}
 </div>
 
-{% set hx_get = url_for('get_cake_leaderboard') %}
+{% set hx_get = url_for('leaderboard.get_cake_leaderboard') %}
 {% set hx_target = '#cake-leaderboard' %}
 {% include 'partials/pagination.html' %}
 

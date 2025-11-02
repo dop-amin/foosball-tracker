@@ -83,7 +83,7 @@
     </table>
 </div>
 
-{% set hx_get = url_for('get_player_games', player_id=player.id) %}
+{% set hx_get = url_for('statistics.get_player_games', player_id=player.id) %}
 {% set hx_target = '#player-games' %}
 {% include 'partials/pagination.html' %}
 
