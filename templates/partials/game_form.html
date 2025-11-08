@@ -3,88 +3,185 @@
     <div class="col-md-6">
         <h6>Black Side</h6>
         {% if game_type == '1v1' %}
-            <div class="mb-3">
-                <select class="form-select" name="team1_players" required>
-                    <option value="">Select Player 1</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 1</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team1_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% elif game_type == '2v2' %}
-            <div class="mb-3">
-                <select class="form-select" name="team1_players" required>
-                    <option value="">Select Player 1</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 1</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team1_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
-            <div class="mb-3">
-                <select class="form-select" name="team1_players" required>
-                    <option value="">Select Player 2</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 2</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team1_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% elif game_type == '2v1' %}
-            <div class="mb-3">
-                <select class="form-select" name="team1_players" required>
-                    <option value="">Select Player 1</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 1</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team1_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
-            <div class="mb-3">
-                <select class="form-select" name="team1_players" required>
-                    <option value="">Select Player 2</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 2</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team1_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% endif %}
     </div>
     <div class="col-md-6">
         <h6>White Side</h6>
         {% if game_type == '1v1' %}
-            <div class="mb-3">
-                <select class="form-select" name="team2_players" required>
-                    <option value="">Select Player 2</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 2</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team2_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% elif game_type == '2v2' %}
-            <div class="mb-3">
-                <select class="form-select" name="team2_players" required>
-                    <option value="">Select Player 1</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 1</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team2_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
-            <div class="mb-3">
-                <select class="form-select" name="team2_players" required>
-                    <option value="">Select Player 2</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player 2</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team2_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% elif game_type == '2v1' %}
-            <div class="mb-3">
-                <select class="form-select" name="team2_players" required>
-                    <option value="">Select Player</option>
+            <div class="mb-3 player-select-wrapper">
+                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+                    <span class="selected-player-name">Select Player</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                <input type="hidden" name="team2_players" required>
+                <div class="player-select-dropdown" style="display: none;">
                     {% for player in players %}
-                    <option value="{{ player.id }}">{{ player.name }}</option>
+                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
         {% endif %}
     </div>
 </div>
+
+<script>
+function togglePlayerSelect(button) {
+    const wrapper = button.closest('.player-select-wrapper');
+    const dropdown = wrapper.querySelector('.player-select-dropdown');
+    const arrow = button.querySelector('.dropdown-arrow');
+    const isOpen = dropdown.style.display === 'block';
+
+    // Close all other dropdowns first
+    document.querySelectorAll('.player-select-dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+    document.querySelectorAll('.dropdown-arrow').forEach(a => {
+        a.textContent = '▼';
+    });
+
+    // Toggle this dropdown
+    if (!isOpen) {
+        dropdown.style.display = 'block';
+        arrow.textContent = '▲';
+    }
+}
+
+function selectPlayer(option) {
+    const wrapper = option.closest('.player-select-wrapper');
+    const button = wrapper.querySelector('.player-select-toggle');
+    const nameSpan = button.querySelector('.selected-player-name');
+    const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+    const dropdown = wrapper.querySelector('.player-select-dropdown');
+    const arrow = button.querySelector('.dropdown-arrow');
+
+    // Update the display and value
+    nameSpan.textContent = option.textContent;
+    hiddenInput.value = option.dataset.value;
+
+    // Close the dropdown
+    dropdown.style.display = 'none';
+    arrow.textContent = '▼';
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.player-select-wrapper')) {
+        document.querySelectorAll('.player-select-dropdown').forEach(d => {
+            d.style.display = 'none';
+        });
+        document.querySelectorAll('.dropdown-arrow').forEach(a => {
+            a.textContent = '▼';
+        });
+    }
+});
+
+// Prevent dropdown from closing when scrolling inside it
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.player-select-dropdown').forEach(dropdown => {
+        dropdown.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        });
+    });
+});
+</script>
 {% endif %}

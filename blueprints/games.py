@@ -1,6 +1,7 @@
 """Blueprint for game-related API routes."""
 
 from flask import Blueprint, render_template, request
+from sqlalchemy import func
 from dateutil.parser import parse
 from models import db, Player, Game, GamePlayer, CakeBalance
 from services.elo_service import update_elo_ratings
@@ -134,7 +135,7 @@ def add_game():
 @games_bp.route("/game-form")
 def get_game_form():
     game_type = request.args.get("game_type")
-    players = Player.query.order_by(Player.name).all()
+    players = Player.query.order_by(func.lower(Player.name)).all()
     return render_template(
         "partials/game_form.html", game_type=game_type, players=players
     )

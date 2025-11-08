@@ -12,6 +12,7 @@ leaderboard_bp = Blueprint("leaderboard", __name__)
 def get_leaderboard():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
+    min_games = request.args.get("min_games", 5, type=int)  # Default to 5 games
 
     # Calculate player statistics
     players_stats = []
@@ -68,6 +69,10 @@ def get_leaderboard():
     # Sort by ELO rating (highest first)
     players_stats.sort(key=lambda x: x["elo_rating"], reverse=True)
 
+    # Filter by minimum games (if min_games is 0 or negative, show all)
+    if min_games > 0:
+        players_stats = [p for p in players_stats if p["total_games"] >= min_games]
+
     # Calculate badges for each player (needs all players for comparisons)
     for player_stat in players_stats:
         player_stat["badges"] = calculate_badges(player_stat, players_stats)
@@ -85,6 +90,7 @@ def get_leaderboard():
         current_page=page,
         total_pages=total_pages,
         rank_offset=(page - 1) * per_page,
+        min_games=min_games,
     )
 
 
@@ -181,26 +187,52 @@ def get_leaderboard_position_chart():
     Return data for leaderboard position chart showing all players' ranks over time.
     Returns JSON data for Chart.js line chart.
     """
+    min_games = request.args.get("min_games", 5, type=int)
+
     # Get all snapshots ordered by date
     snapshots = LeaderboardHistory.query.order_by(LeaderboardHistory.snapshot_date).all()
 
     if not snapshots:
         return jsonify({"dates": [], "datasets": []})
 
-    # Organize data by player
-    player_data = defaultdict(lambda: {"name": "", "ranks": [], "dates": []})
-
-    for snapshot in snapshots:
-        player_id = snapshot.player_id
-        if not player_data[player_id]["name"]:
-            player_data[player_id]["name"] = snapshot.player.name
-
-        player_data[player_id]["dates"].append(snapshot.snapshot_date.strftime("%Y-%m-%d"))
-        player_data[player_id]["ranks"].append(snapshot.rank)
+    # If filtering by min_games, get the set of player IDs that meet the criteria
+    filtered_player_ids = None
+    if min_games > 0:
+        filtered_player_ids = set()
+        players = Player.query.all()
+        for player in players:
+            total_games = GamePlayer.query.filter_by(player_id=player.id).count()
+            if total_games >= min_games:
+                filtered_player_ids.add(player.id)
 
     # Get all unique dates (sorted)
     all_dates = sorted(set(snapshot.snapshot_date for snapshot in snapshots))
     date_strings = [d.strftime("%Y-%m-%d") for d in all_dates]
+
+    # Group snapshots by date for recalculating ranks
+    snapshots_by_date = defaultdict(list)
+    for snapshot in snapshots:
+        if filtered_player_ids is None or snapshot.player_id in filtered_player_ids:
+            snapshots_by_date[snapshot.snapshot_date].append(snapshot)
+
+    # Organize data by player with recalculated ranks
+    player_data = defaultdict(lambda: {"name": "", "ranks": [], "dates": []})
+
+    for date in all_dates:
+        date_snapshots = snapshots_by_date[date]
+
+        # Sort by ELO rating (descending) to recalculate ranks
+        date_snapshots.sort(key=lambda s: s.elo_rating, reverse=True)
+
+        # Assign new ranks based on filtered players
+        for new_rank, snapshot in enumerate(date_snapshots, start=1):
+            player_id = snapshot.player_id
+
+            if not player_data[player_id]["name"]:
+                player_data[player_id]["name"] = snapshot.player.name
+
+            player_data[player_id]["dates"].append(date.strftime("%Y-%m-%d"))
+            player_data[player_id]["ranks"].append(new_rank)
 
     # Build datasets for each player
     datasets = []

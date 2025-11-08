@@ -1,6 +1,7 @@
 """Blueprint for player-related API routes."""
 
 from flask import Blueprint, render_template, request
+from sqlalchemy import func
 from models import db, Player
 
 players_bp = Blueprint("players", __name__)
@@ -11,7 +12,7 @@ def get_players():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
 
-    pagination = Player.query.order_by(Player.name).paginate(
+    pagination = Player.query.order_by(func.lower(Player.name)).paginate(
         page=page, per_page=per_page, error_out=False
     )
 
