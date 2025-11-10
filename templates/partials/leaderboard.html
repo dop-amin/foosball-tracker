@@ -68,7 +68,8 @@
     </table>
 </div>
 
-{% set hx_get = url_for('leaderboard.get_leaderboard', min_games=min_games) %}
+{% set hx_get = url_for('leaderboard.get_leaderboard') %}
+{% set hx_params = {'min_games': min_games} %}
 {% set hx_target = '#leaderboard-content' %}
 {% include 'partials/pagination.html' %}
 

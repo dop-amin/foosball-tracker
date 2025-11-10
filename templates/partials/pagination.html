@@ -1,3 +1,12 @@
+{# Build query string from optional hx_params dict #}
+{% set query_parts = ['page=PAGENUM'] %}
+{% if hx_params is defined %}
+    {% for key, value in hx_params.items() %}
+        {% set _ = query_parts.append(key ~ '=' ~ value) %}
+    {% endfor %}
+{% endif %}
+{% set query_template = '?' ~ query_parts|join('&') %}
+
 {% if total_pages > 1 %}
 <nav aria-label="Page navigation" class="mt-3">
     <ul class="pagination justify-content-center">
@@ -5,7 +14,7 @@
         <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
             <a class="page-link"
                {% if current_page > 1 %}
-               hx-get="{{ hx_get }}?page={{ current_page - 1 }}"
+               hx-get="{{ hx_get }}{{ query_template|replace('PAGENUM', (current_page - 1)|string) }}"
                hx-target="{{ hx_target }}"
                hx-swap="innerHTML"
                {% endif %}
@@ -19,7 +28,7 @@
         {% if current_page > 3 %}
         <li class="page-item">
             <a class="page-link"
-               hx-get="{{ hx_get }}?page=1"
+               hx-get="{{ hx_get }}{{ query_template|replace('PAGENUM', '1') }}"
                hx-target="{{ hx_target }}"
                hx-swap="innerHTML"
                href="#">1</a>
@@ -36,7 +45,7 @@
         <li class="page-item {% if page == current_page %}active{% endif %}">
             <a class="page-link"
                {% if page != current_page %}
-               hx-get="{{ hx_get }}?page={{ page }}"
+               hx-get="{{ hx_get }}{{ query_template|replace('PAGENUM', page|string) }}"
                hx-target="{{ hx_target }}"
                hx-swap="innerHTML"
                {% endif %}
@@ -53,7 +62,7 @@
         {% endif %}
         <li class="page-item">
             <a class="page-link"
-               hx-get="{{ hx_get }}?page={{ total_pages }}"
+               hx-get="{{ hx_get }}{{ query_template|replace('PAGENUM', total_pages|string) }}"
                hx-target="{{ hx_target }}"
                hx-swap="innerHTML"
                href="#">{{ total_pages }}</a>
@@ -64,7 +73,7 @@
         <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
             <a class="page-link"
                {% if current_page < total_pages %}
-               hx-get="{{ hx_get }}?page={{ current_page + 1 }}"
+               hx-get="{{ hx_get }}{{ query_template|replace('PAGENUM', (current_page + 1)|string) }}"
                hx-target="{{ hx_target }}"
                hx-swap="innerHTML"
                {% endif %}
