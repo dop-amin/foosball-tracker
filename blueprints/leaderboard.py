@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, request, jsonify
 from collections import defaultdict
 from models import db, Player, GamePlayer, Game, CakeBalance, LeaderboardHistory
-from services.statistics_service import calculate_badges
+from services.statistics_service import calculate_badges, precompute_badge_data
 
 leaderboard_bp = Blueprint("leaderboard", __name__)
 
@@ -14,41 +14,73 @@ def get_leaderboard():
     per_page = request.args.get("per_page", 20, type=int)
     min_games = request.args.get("min_games", 5, type=int)  # Default to 5 games
 
-    # Calculate player statistics
+    # Calculate player statistics using optimized aggregation query
+    # Single query with joins to get all stats at once
+    stats_query = db.session.query(
+        Player,
+        db.func.count(GamePlayer.id).label('total_games'),
+        db.func.sum(db.case((GamePlayer.is_winner == True, 1), else_=0)).label('wins'),
+        db.func.sum(
+            db.case(
+                (GamePlayer.team == 1, Game.team1_score),
+                else_=Game.team2_score
+            )
+        ).label('goals_for'),
+        db.func.sum(
+            db.case(
+                (GamePlayer.team == 1, Game.team2_score),
+                else_=Game.team1_score
+            )
+        ).label('goals_against'),
+        db.func.sum(
+            db.case(
+                (
+                    db.and_(
+                        db.or_(
+                            Game.team1_score - Game.team2_score >= 10,
+                            Game.team2_score - Game.team1_score >= 10
+                        ),
+                        GamePlayer.is_winner == True
+                    ),
+                    1
+                ),
+                else_=0
+            )
+        ).label('shutouts_given'),
+        db.func.sum(
+            db.case(
+                (
+                    db.and_(
+                        db.or_(
+                            Game.team1_score - Game.team2_score >= 10,
+                            Game.team2_score - Game.team1_score >= 10
+                        ),
+                        GamePlayer.is_winner == False
+                    ),
+                    1
+                ),
+                else_=0
+            )
+        ).label('shutouts_received')
+    ).join(GamePlayer, Player.id == GamePlayer.player_id
+    ).join(Game, GamePlayer.game_id == Game.id
+    ).group_by(Player.id)
+
+    # Execute query and build stats list
     players_stats = []
-    players = Player.query.all()
+    for row in stats_query.all():
+        player, total_games, wins, goals_for, goals_against, shutouts_given, shutouts_received = row
 
-    for player in players:
-        total_games = GamePlayer.query.filter_by(player_id=player.id).count()
-        wins = GamePlayer.query.filter_by(player_id=player.id, is_winner=True).count()
+        # Convert to int (they come back as Decimal/long from SQL aggregates)
+        total_games = int(total_games or 0)
+        wins = int(wins or 0)
+        goals_for = int(goals_for or 0)
+        goals_against = int(goals_against or 0)
+        shutouts_given = int(shutouts_given or 0)
+        shutouts_received = int(shutouts_received or 0)
+
         losses = total_games - wins
-
         win_rate = (wins / total_games * 100) if total_games > 0 else 0
-
-        # Calculate goals scored and conceded
-        goals_for = 0
-        goals_against = 0
-
-        for gp in GamePlayer.query.filter_by(player_id=player.id).all():
-            game = gp.game
-            if gp.team == 1:
-                goals_for += game.team1_score
-                goals_against += game.team2_score
-            else:
-                goals_for += game.team2_score
-                goals_against += game.team1_score
-
-        # Calculate shutouts given and received
-        shutouts_given = 0
-        shutouts_received = 0
-
-        for gp in GamePlayer.query.filter_by(player_id=player.id).all():
-            game = gp.game
-            if game.is_shutout:
-                if gp.is_winner:
-                    shutouts_given += 1
-                else:
-                    shutouts_received += 1
 
         players_stats.append(
             {
@@ -73,9 +105,13 @@ def get_leaderboard():
     if min_games > 0:
         players_stats = [p for p in players_stats if p["total_games"] >= min_games]
 
+    # Pre-compute badge data for all players in one go
+    player_ids = [p["player"].id for p in players_stats]
+    cached_badge_data = precompute_badge_data(player_ids)
+
     # Calculate badges for each player (needs all players for comparisons)
     for player_stat in players_stats:
-        player_stat["badges"] = calculate_badges(player_stat, players_stats)
+        player_stat["badges"] = calculate_badges(player_stat, players_stats, cached_badge_data)
 
     # Manual pagination
     total_items = len(players_stats)

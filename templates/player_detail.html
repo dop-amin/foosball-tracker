@@ -108,6 +108,7 @@
                         y: {
                             reverse: true,  // Rank 1 at top
                             beginAtZero: false,
+                            min: 1,  // Upper scale is always 1
                             position: 'left',
                             ticks: {
                                 stepSize: 1,
@@ -128,6 +129,15 @@
                             },
                             grid: {
                                 drawOnChartArea: false
+                            },
+                            afterDataLimits: function(axis) {
+                                // Ensure 1500 is in the middle of the scale
+                                const range = Math.max(
+                                    Math.abs(axis.max - 1500),
+                                    Math.abs(1500 - axis.min)
+                                );
+                                axis.min = 1500 - range;
+                                axis.max = 1500 + range;
                             }
                         },
                         x: {
