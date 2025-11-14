@@ -326,3 +326,106 @@ def get_leaderboard_position_chart():
         "dates": date_strings,
         "datasets": datasets
     })
+
+
+@leaderboard_bp.route("/all-time-leaderboard")
+def get_all_time_leaderboard_view():
+    """Get all-time leaderboard across all seasons."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+
+    all_time_stats = get_all_time_leaderboard()
+
+    # Manual pagination
+    total_items = len(all_time_stats)
+    total_pages = (total_items + per_page - 1) // per_page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_stats = all_time_stats[start_idx:end_idx]
+
+    return render_template(
+        "partials/all_time_leaderboard.html",
+        players_stats=paginated_stats,
+        current_page=page,
+        total_pages=total_pages,
+        rank_offset=(page - 1) * per_page,
+    )
+
+
+@leaderboard_bp.route("/season-selector")
+def get_season_selector():
+    """Get season selector dropdown."""
+    current_season = get_current_season()
+    all_seasons = get_all_seasons(order_by_newest=True)
+
+    return render_template(
+        "partials/season_selector.html",
+        current_season=current_season,
+        all_seasons=all_seasons,
+    )
+
+
+@leaderboard_bp.route("/season/<int:season_id>/leaderboard")
+def get_season_leaderboard_view(season_id):
+    """Get leaderboard for a specific season."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 20, type=int)
+    min_games = request.args.get("min_games", 5, type=int)
+
+    from services.season_service import get_season_by_id
+    season = get_season_by_id(season_id)
+    if not season:
+        return '<div class="alert alert-danger">Season not found!</div>', 404
+
+    season_stats = get_season_leaderboard(season_id)
+
+    # Filter by minimum games
+    if min_games > 0:
+        season_stats = [p for p in season_stats if p["total_games"] >= min_games]
+
+    # Manual pagination
+    total_items = len(season_stats)
+    total_pages = (total_items + per_page - 1) // per_page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_stats = season_stats[start_idx:end_idx]
+
+    return render_template(
+        "partials/season_leaderboard.html",
+        players_stats=paginated_stats,
+        season=season,
+        current_page=page,
+        total_pages=total_pages,
+        rank_offset=(page - 1) * per_page,
+        min_games=min_games,
+    )
+
+
+@leaderboard_bp.route("/season-info")
+def get_season_info():
+    """Debug endpoint to show current season information."""
+    current_season = get_current_season()
+    all_seasons = get_all_seasons(order_by_newest=True)
+
+    info = {
+        "current_season": {
+            "id": current_season.id,
+            "name": current_season.name,
+            "start_date": current_season.start_date.isoformat(),
+            "end_date": current_season.end_date.isoformat(),
+            "is_current": current_season.is_current,
+        },
+        "all_seasons": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "start_date": s.start_date.isoformat(),
+                "end_date": s.end_date.isoformat(),
+                "is_current": s.is_current,
+                "games_count": len(s.games) if s.games else 0,
+            }
+            for s in all_seasons
+        ]
+    }
+
+    return jsonify(info)
