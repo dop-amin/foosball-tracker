@@ -232,11 +232,11 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
         current_streak, best_streak = calculate_player_streaks(player.id)
 
     if current_streak >= 10:
-        badges.append({"emoji": "💥", "label": "Unstoppable", "color": "danger", "tooltip": f"Unstoppable: Currently on a {current_streak} game winning streak!"})
+        badges.append({"emoji": "💥", "label": "Unstoppable", "color": "danger", "tooltip": f"Currently on a {current_streak} game winning streak!"})
     elif current_streak >= 5:
-        badges.append({"emoji": "🔥", "label": "On Fire", "color": "danger", "tooltip": f"On Fire: Currently on a {current_streak} game winning streak!"})
+        badges.append({"emoji": "🔥", "label": "On Fire", "color": "danger", "tooltip": f"Currently on a {current_streak} game winning streak!"})
     elif current_streak >= 3:
-        badges.append({"emoji": "⚡", "label": "Hot Streak", "color": "warning", "tooltip": f"Hot Streak: Currently on a {current_streak} game winning streak!"})
+        badges.append({"emoji": "⚡", "label": "Hot Streak", "color": "warning", "tooltip": f"Currently on a {current_streak} game winning streak!"})
 
     # Performance Badges
     if player_stats["total_games"] >= 10 and player_stats["win_rate"] == 100:
