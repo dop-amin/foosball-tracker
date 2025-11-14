@@ -120,9 +120,14 @@ def precompute_badge_data(player_ids):
 
     cached_data['early_bird'] = {player_id for (player_id,) in early_bird_games}
 
-    # Compute Cat badge (lost against majority of players)
-    # For each player, find unique opponents and count losses against unique opponents
+    # Compute Cat badge (lost to at least 90% of ALL other players)
+    # For each player, check if they've lost to at least 90% of all other players
+    total_other_players = len(player_ids) - 1  # All players except the current one
+
     for player_id in player_ids:
+        if total_other_players == 0:
+            continue
+
         # Get all games for this player
         player_games = db.session.query(
             GamePlayer.is_winner,
@@ -156,7 +161,6 @@ def precompute_badge_data(player_ids):
                 opponents_by_game[opp_data.game_id] = []
             opponents_by_game[opp_data.game_id].append(opp_data)
 
-        unique_opponents = set()
         opponents_lost_to = set()
 
         for game in player_games:
@@ -164,45 +168,62 @@ def precompute_badge_data(player_ids):
             for opp in game_opponents:
                 # Opponent is on different team
                 if opp.team != game.team:
-                    unique_opponents.add(opp.player_id)
                     # If this player lost this game, they lost to this opponent
                     if not game.is_winner:
                         opponents_lost_to.add(opp.player_id)
 
-        # Cat badge: lost to more than 50% of unique opponents
-        if len(unique_opponents) > 0:
-            loss_ratio = len(opponents_lost_to) / len(unique_opponents)
+        # Cat badge: lost to at least 90% of ALL other players
+        loss_ratio = len(opponents_lost_to) / total_other_players
+        if loss_ratio >= 0.9:
             cached_data['cat_data'][player_id] = {
-                'unique_opponents': len(unique_opponents),
+                'total_other_players': total_other_players,
                 'opponents_lost_to': len(opponents_lost_to),
                 'loss_ratio': loss_ratio
             }
 
-    # Compute Addict badge (avg 3+ games per day for a week = 21+ games in any 7-day period)
+    # Compute Addict badge (3+ games per day in last 5 business days)
+    # Business days = weekdays (Monday-Friday), excluding weekends
+    today = datetime.now(timezone.utc).date()
+
+    # Find the last 5 business days
+    business_days = []
+    current_date = today
+    while len(business_days) < 5:
+        # weekday() returns 0=Monday, 6=Sunday
+        if current_date.weekday() < 5:  # 0-4 are Monday-Friday
+            business_days.append(current_date)
+        current_date = current_date - timedelta(days=1)
+
+    business_days.reverse()  # Oldest to newest
+
     for player_id in player_ids:
-        # Get all games sorted by start time
+        # Get all games for this player in the last 5 business days
+        earliest_business_day = business_days[0]
+        latest_business_day = business_days[-1]
+
         games = db.session.query(
             Game.start_time
         ).join(
             GamePlayer, GamePlayer.game_id == Game.id
         ).filter(
-            GamePlayer.player_id == player_id
-        ).order_by(Game.start_time.asc()).all()
+            GamePlayer.player_id == player_id,
+            func.date(Game.start_time) >= earliest_business_day,
+            func.date(Game.start_time) <= latest_business_day
+        ).all()
 
-        if len(games) < 21:
+        if not games:
             continue
 
-        # Check if there's any 7-day window with 21+ games
-        for i in range(len(games)):
-            window_start = games[i].start_time
-            window_end = window_start + timedelta(days=7)
+        # Count games per business day
+        games_per_day = {}
+        for game in games:
+            game_date = game.start_time.date()
+            if game_date in business_days:
+                games_per_day[game_date] = games_per_day.get(game_date, 0) + 1
 
-            # Count games in this window
-            games_in_window = sum(1 for g in games[i:] if g.start_time < window_end)
-
-            if games_in_window >= 21:
-                cached_data['addict'].add(player_id)
-                break
+        # Check if player has 3+ games on each of the last 5 business days
+        if all(games_per_day.get(day, 0) >= 3 for day in business_days):
+            cached_data['addict'].add(player_id)
 
     return cached_data
 
@@ -343,14 +364,13 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
     if cached_data and player.id in cached_data.get('early_bird', set()):
         badges.append({"emoji": "🐦", "label": "Early Bird", "color": "warning", "tooltip": "Played a game between 6am and 9am"})
 
-    # Cat badge (lost against majority of players)
+    # Cat badge (lost to at least 90% of all other players)
     if cached_data and player.id in cached_data.get('cat_data', {}):
         cat_info = cached_data['cat_data'][player.id]
-        if cat_info['loss_ratio'] > 0.5 and cat_info['unique_opponents'] >= 3:
-            badges.append({"emoji": "🐱", "label": "Cat", "color": "secondary", "tooltip": f"Has many lives: Lost to {cat_info['opponents_lost_to']}/{cat_info['unique_opponents']} opponents"})
+        badges.append({"emoji": "🐱", "label": "Cat", "color": "secondary", "tooltip": f"Many lives: Lost to {cat_info['opponents_lost_to']}/{cat_info['total_other_players']} other players"})
 
-    # Addict badge (3+ games per day for a week)
+    # Addict badge (3+ games per day in last 5 business days)
     if cached_data and player.id in cached_data.get('addict', set()):
-        badges.append({"emoji": "💉", "label": "Addict", "color": "danger", "tooltip": "Played 21+ games in a 7-day period (avg 3+ per day)"})
+        badges.append({"emoji": "💉", "label": "Addict", "color": "danger", "tooltip": "Played 3+ games per day in the last 5 business days"})
 
     return badges
