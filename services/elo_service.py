@@ -1,6 +1,6 @@
 """ELO rating calculation and management service."""
 
-from models import db, Player, Game, GamePlayer
+from models import db, Player, Game, GamePlayer, Season
 
 
 def calculate_elo_change(
@@ -75,18 +75,31 @@ def update_elo_ratings(game):
 def recalculate_all_elo_ratings():
     """
     Recalculate ELO ratings for all players from scratch by replaying all games.
-    This is useful for initializing ELO ratings or fixing inconsistencies.
+    Processes each season separately, resetting ratings to 1500 at the start of each season.
+    Updates players' current ELO to reflect their rating in the most recent (current) season.
     """
-    # Reset all player ratings to 1500
-    players = Player.query.all()
-    for player in players:
-        player.elo_rating = 1500
+    # Get all seasons in chronological order
+    seasons = Season.query.order_by(Season.start_date).all()
 
-    # Get all games in chronological order
-    games = Game.query.order_by(Game.start_time).all()
+    if not seasons:
+        # No seasons exist, nothing to recalculate
+        db.session.commit()
+        return
 
-    # Replay each game to update ELO ratings
-    for game in games:
-        update_elo_ratings(game)
+    # Process each season
+    for season in seasons:
+        # Reset all player ratings to 1500 at the start of each season
+        players = Player.query.all()
+        for player in players:
+            player.elo_rating = 1500
 
+        # Get all games for this season in chronological order
+        games = Game.query.filter_by(season_id=season.id).order_by(Game.start_time).all()
+
+        # Replay each game to update ELO ratings
+        for game in games:
+            update_elo_ratings(game)
+
+    # At this point, all players have their ELO from the most recent season
+    # (since we processed seasons chronologically)
     db.session.commit()

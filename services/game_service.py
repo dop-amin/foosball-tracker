@@ -24,13 +24,18 @@ def update_cake_balance(game):
     for loser_id in losers:
         for winner_id in winners:
             balance = CakeBalance.query.filter_by(
-                debtor_id=loser_id, creditor_id=winner_id
+                season_id=game.season_id,
+                debtor_id=loser_id,
+                creditor_id=winner_id
             ).first()
 
             if balance:
                 balance.balance += 1
             else:
                 balance = CakeBalance(
-                    debtor_id=loser_id, creditor_id=winner_id, balance=1
+                    season_id=game.season_id,
+                    debtor_id=loser_id,
+                    creditor_id=winner_id,
+                    balance=1
                 )
                 db.session.add(balance)

@@ -2,8 +2,10 @@
 
 from flask import Blueprint, render_template, request, jsonify
 from collections import defaultdict
-from models import db, Player, GamePlayer, Game, CakeBalance, LeaderboardHistory
+from models import db, Player, GamePlayer, Game, CakeBalance, LeaderboardHistory, Season
 from services.statistics_service import calculate_badges, precompute_badge_data
+from services.season_service import get_current_season, get_all_seasons
+from services.leaderboard_service import get_all_time_leaderboard, get_season_leaderboard
 
 leaderboard_bp = Blueprint("leaderboard", __name__)
 
@@ -13,6 +15,9 @@ def get_leaderboard():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
     min_games = request.args.get("min_games", 5, type=int)  # Default to 5 games
+
+    # Get current season
+    current_season = get_current_season()
 
     # Calculate player statistics using optimized aggregation query
     # Single query with joins to get all stats at once
@@ -64,6 +69,7 @@ def get_leaderboard():
         ).label('shutouts_received')
     ).join(GamePlayer, Player.id == GamePlayer.player_id
     ).join(Game, GamePlayer.game_id == Game.id
+    ).filter(Game.season_id == current_season.id
     ).group_by(Player.id)
 
     # Execute query and build stats list
@@ -107,11 +113,11 @@ def get_leaderboard():
 
     # Pre-compute badge data for all players in one go
     player_ids = [p["player"].id for p in players_stats]
-    cached_badge_data = precompute_badge_data(player_ids)
+    cached_badge_data = precompute_badge_data(player_ids, current_season.id)
 
     # Calculate badges for each player (needs all players for comparisons)
     for player_stat in players_stats:
-        player_stat["badges"] = calculate_badges(player_stat, players_stats, cached_badge_data)
+        player_stat["badges"] = calculate_badges(player_stat, players_stats, cached_badge_data, current_season.id)
 
     # Manual pagination
     total_items = len(players_stats)
@@ -135,12 +141,16 @@ def get_cake_leaderboard():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
 
+    # Get current season
+    current_season = get_current_season()
+
     # Get players with most cakes owed to them
     cake_stats_query = (
         db.session.query(
             Player.name, db.func.sum(CakeBalance.balance).label("total_cakes")
         )
         .join(CakeBalance, Player.id == CakeBalance.creditor_id)
+        .filter(CakeBalance.season_id == current_season.id)
         .group_by(Player.id, Player.name)
         .order_by(db.func.sum(CakeBalance.balance).desc())
     )
@@ -151,6 +161,7 @@ def get_cake_leaderboard():
             Player.name, db.func.sum(CakeBalance.balance).label("total_debt")
         )
         .join(CakeBalance, Player.id == CakeBalance.debtor_id)
+        .filter(CakeBalance.season_id == current_season.id)
         .group_by(Player.id, Player.name)
         .order_by(db.func.sum(CakeBalance.balance).desc())
     )
@@ -178,6 +189,9 @@ def get_cake_leaderboard():
 
 @leaderboard_bp.route("/win-rates")
 def get_win_rates():
+    # Get current season
+    current_season = get_current_season()
+
     # Calculate win rates by game type for each player
     win_rates = {}
     players = Player.query.all()
@@ -186,11 +200,15 @@ def get_win_rates():
     for player in players:
         win_rates[player.name] = {}
         for game_type in game_types:
-            # Get games for this player and game type
+            # Get games for this player and game type in current season
             games_played = (
                 db.session.query(GamePlayer)
                 .join(Game)
-                .filter(GamePlayer.player_id == player.id, Game.game_type == game_type)
+                .filter(
+                    GamePlayer.player_id == player.id,
+                    Game.game_type == game_type,
+                    Game.season_id == current_season.id
+                )
                 .count()
             )
 
@@ -201,6 +219,7 @@ def get_win_rates():
                     GamePlayer.player_id == player.id,
                     Game.game_type == game_type,
                     GamePlayer.is_winner == True,
+                    Game.season_id == current_season.id
                 )
                 .count()
             )
@@ -225,8 +244,13 @@ def get_leaderboard_position_chart():
     """
     min_games = request.args.get("min_games", 5, type=int)
 
-    # Get all snapshots ordered by date
-    snapshots = LeaderboardHistory.query.order_by(LeaderboardHistory.snapshot_date).all()
+    # Get current season
+    current_season = get_current_season()
+
+    # Get all snapshots for current season ordered by date
+    snapshots = LeaderboardHistory.query.filter_by(
+        season_id=current_season.id
+    ).order_by(LeaderboardHistory.snapshot_date).all()
 
     if not snapshots:
         return jsonify({"dates": [], "datasets": []})
@@ -237,7 +261,10 @@ def get_leaderboard_position_chart():
         filtered_player_ids = set()
         players = Player.query.all()
         for player in players:
-            total_games = GamePlayer.query.filter_by(player_id=player.id).count()
+            total_games = db.session.query(GamePlayer).join(Game).filter(
+                GamePlayer.player_id == player.id,
+                Game.season_id == current_season.id
+            ).count()
             if total_games >= min_games:
                 filtered_player_ids.add(player.id)
 

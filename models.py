@@ -4,6 +4,20 @@ from datetime import datetime
 db = SQLAlchemy()
 
 
+class Season(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)  # e.g., "Q1 2025"
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=False)
+    is_current = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    games = db.relationship("Game", back_populates="season")
+
+    def __repr__(self):
+        return f"<Season {self.name}>"
+
+
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
@@ -16,6 +30,7 @@ class Player(db.Model):
 
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
     game_type = db.Column(db.String(10), nullable=False)  # '1v1', '2v2', '2v1'
@@ -23,6 +38,7 @@ class Game(db.Model):
     team2_score = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    season = db.relationship("Season", back_populates="games")
     players = db.relationship(
         "GamePlayer", back_populates="game", cascade="all, delete-orphan"
     )
@@ -58,33 +74,37 @@ class GamePlayer(db.Model):
 
 class CakeBalance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
     debtor_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     creditor_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     balance = db.Column(db.Integer, default=0)
 
+    season = db.relationship("Season")
     debtor = db.relationship("Player", foreign_keys=[debtor_id])
     creditor = db.relationship("Player", foreign_keys=[creditor_id])
 
     def __repr__(self):
-        return f"<CakeBalance {self.debtor.name} owes {self.creditor.name}: {self.balance}>"
+        return f"<CakeBalance {self.debtor.name} owes {self.creditor.name}: {self.balance} (Season {self.season_id})>"
 
 
 class LeaderboardHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     snapshot_date = db.Column(db.Date, nullable=False)
     rank = db.Column(db.Integer, nullable=False)
     elo_rating = db.Column(db.Integer, nullable=False)
     total_games = db.Column(db.Integer, nullable=False)
 
+    season = db.relationship("Season")
     player = db.relationship("Player")
 
     __table_args__ = (
-        db.UniqueConstraint("player_id", "snapshot_date", name="unique_player_date"),
+        db.UniqueConstraint("player_id", "season_id", "snapshot_date", name="unique_player_season_date"),
     )
 
     def __repr__(self):
-        return f"<LeaderboardHistory {self.player.name} rank {self.rank} on {self.snapshot_date}>"
+        return f"<LeaderboardHistory {self.player.name} rank {self.rank} on {self.snapshot_date} (Season {self.season_id})>"
 
 
 class Tournament(db.Model):

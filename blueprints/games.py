@@ -7,6 +7,7 @@ from models import db, Player, Game, GamePlayer, CakeBalance
 from services.elo_service import update_elo_ratings
 from services.game_service import update_cake_balance
 from services.leaderboard_service import create_daily_snapshot
+from services.season_service import get_current_season
 
 games_bp = Blueprint("games", __name__)
 
@@ -63,8 +64,12 @@ def add_game():
                 200,
             )
 
+        # Get current season
+        current_season = get_current_season()
+
         # Create game
         game = Game(
+            season_id=current_season.id,
             game_type=game_type,
             start_time=start_time,
             end_time=end_time,
@@ -120,7 +125,7 @@ def add_game():
 
         # Create daily snapshot after committing the game
         try:
-            create_daily_snapshot()
+            create_daily_snapshot(current_season.id)
         except Exception as snapshot_error:
             # Log error but don't fail the game creation
             print(f"Warning: Failed to create daily snapshot: {snapshot_error}")
@@ -152,9 +157,12 @@ def get_cake_balances():
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
 
+    # Get current season
+    current_season = get_current_season()
+
     pagination = (
         db.session.query(CakeBalance)
-        .filter(CakeBalance.balance > 0)
+        .filter(CakeBalance.balance > 0, CakeBalance.season_id == current_season.id)
         .paginate(page=page, per_page=per_page, error_out=False)
     )
 
