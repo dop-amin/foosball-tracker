@@ -367,7 +367,7 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
     # Cat badge (lost to at least 90% of all other players)
     if cached_data and player.id in cached_data.get('cat_data', {}):
         cat_info = cached_data['cat_data'][player.id]
-        badges.append({"emoji": "🐱", "label": "Cat", "color": "secondary", "tooltip": f"Many lives: Lost to {cat_info['opponents_lost_to']}/{cat_info['total_other_players']} other players"})
+        badges.append({"emoji": "🐱", "label": "Many Lives", "color": "secondary", "tooltip": f"Lost to {cat_info['opponents_lost_to']}/{cat_info['total_other_players']} other players"})
 
     # Addict badge (3+ games per day in last 5 business days)
     if cached_data and player.id in cached_data.get('addict', set()):
