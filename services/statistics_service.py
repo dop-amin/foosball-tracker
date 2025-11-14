@@ -1,7 +1,7 @@
 """Statistics calculation service including streaks and badges."""
 
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from models import db, GamePlayer, Game, CakeBalance
 
 
@@ -44,12 +44,16 @@ def precompute_badge_data(player_ids):
         player_ids: List of player IDs to compute data for
 
     Returns:
-        Dictionary with keys 'streaks', 'cake_totals', 'recent_games'
+        Dictionary with keys 'streaks', 'cake_totals', 'recent_games', 'night_owl', 'early_bird', 'cat_data', 'addict'
     """
     cached_data = {
         'streaks': {},
         'cake_totals': {},
-        'recent_games': {}
+        'recent_games': {},
+        'night_owl': set(),
+        'early_bird': set(),
+        'cat_data': {},
+        'addict': set()
     }
 
     # Bulk compute streaks for all players
@@ -91,6 +95,114 @@ def precompute_badge_data(player_ids):
     for player_id in player_ids:
         if player_id not in cached_data['recent_games']:
             cached_data['recent_games'][player_id] = 0
+
+    # Compute Night Owl badge (played between 8pm and 6am)
+    night_owl_games = db.session.query(GamePlayer.player_id).join(
+        Game, GamePlayer.game_id == Game.id
+    ).filter(
+        GamePlayer.player_id.in_(player_ids),
+        or_(
+            func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 20,
+            func.cast(func.strftime('%H', Game.start_time), db.Integer) < 6
+        )
+    ).distinct().all()
+
+    cached_data['night_owl'] = {player_id for (player_id,) in night_owl_games}
+
+    # Compute Early Bird badge (played between 6am and 9am)
+    early_bird_games = db.session.query(GamePlayer.player_id).join(
+        Game, GamePlayer.game_id == Game.id
+    ).filter(
+        GamePlayer.player_id.in_(player_ids),
+        func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 6,
+        func.cast(func.strftime('%H', Game.start_time), db.Integer) < 9
+    ).distinct().all()
+
+    cached_data['early_bird'] = {player_id for (player_id,) in early_bird_games}
+
+    # Compute Cat badge (lost against majority of players)
+    # For each player, find unique opponents and count losses against unique opponents
+    for player_id in player_ids:
+        # Get all games for this player
+        player_games = db.session.query(
+            GamePlayer.is_winner,
+            GamePlayer.team,
+            Game.id.label('game_id')
+        ).join(
+            Game, GamePlayer.game_id == Game.id
+        ).filter(
+            GamePlayer.player_id == player_id
+        ).all()
+
+        if not player_games:
+            continue
+
+        # Get all opponents (players on the opposite team in each game)
+        game_ids = [g.game_id for g in player_games]
+        opponents_data = db.session.query(
+            GamePlayer.player_id,
+            GamePlayer.is_winner,
+            GamePlayer.team,
+            GamePlayer.game_id
+        ).filter(
+            GamePlayer.game_id.in_(game_ids),
+            GamePlayer.player_id != player_id
+        ).all()
+
+        # Build opponent map per game
+        opponents_by_game = {}
+        for opp_data in opponents_data:
+            if opp_data.game_id not in opponents_by_game:
+                opponents_by_game[opp_data.game_id] = []
+            opponents_by_game[opp_data.game_id].append(opp_data)
+
+        unique_opponents = set()
+        opponents_lost_to = set()
+
+        for game in player_games:
+            game_opponents = opponents_by_game.get(game.game_id, [])
+            for opp in game_opponents:
+                # Opponent is on different team
+                if opp.team != game.team:
+                    unique_opponents.add(opp.player_id)
+                    # If this player lost this game, they lost to this opponent
+                    if not game.is_winner:
+                        opponents_lost_to.add(opp.player_id)
+
+        # Cat badge: lost to more than 50% of unique opponents
+        if len(unique_opponents) > 0:
+            loss_ratio = len(opponents_lost_to) / len(unique_opponents)
+            cached_data['cat_data'][player_id] = {
+                'unique_opponents': len(unique_opponents),
+                'opponents_lost_to': len(opponents_lost_to),
+                'loss_ratio': loss_ratio
+            }
+
+    # Compute Addict badge (avg 3+ games per day for a week = 21+ games in any 7-day period)
+    for player_id in player_ids:
+        # Get all games sorted by start time
+        games = db.session.query(
+            Game.start_time
+        ).join(
+            GamePlayer, GamePlayer.game_id == Game.id
+        ).filter(
+            GamePlayer.player_id == player_id
+        ).order_by(Game.start_time.asc()).all()
+
+        if len(games) < 21:
+            continue
+
+        # Check if there's any 7-day window with 21+ games
+        for i in range(len(games)):
+            window_start = games[i].start_time
+            window_end = window_start + timedelta(days=7)
+
+            # Count games in this window
+            games_in_window = sum(1 for g in games[i:] if g.start_time < window_end)
+
+            if games_in_window >= 21:
+                cached_data['addict'].add(player_id)
+                break
 
     return cached_data
 
@@ -222,5 +334,23 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
 
     if recent_games >= 5 and all_recent_games and recent_games == max(all_recent_games):
         badges.append({"emoji": "📈", "label": "Marathon", "color": "info", "tooltip": f"Most active player: {recent_games} games in the last 7 days"})
+
+    # Night Owl badge (played between 8pm and 6am)
+    if cached_data and player.id in cached_data.get('night_owl', set()):
+        badges.append({"emoji": "🦉", "label": "Night Owl", "color": "dark", "tooltip": "Played a game between 8pm and 6am"})
+
+    # Early Bird badge (played between 6am and 9am)
+    if cached_data and player.id in cached_data.get('early_bird', set()):
+        badges.append({"emoji": "🐦", "label": "Early Bird", "color": "warning", "tooltip": "Played a game between 6am and 9am"})
+
+    # Cat badge (lost against majority of players)
+    if cached_data and player.id in cached_data.get('cat_data', {}):
+        cat_info = cached_data['cat_data'][player.id]
+        if cat_info['loss_ratio'] > 0.5 and cat_info['unique_opponents'] >= 3:
+            badges.append({"emoji": "🐱", "label": "Cat", "color": "secondary", "tooltip": f"Has many lives: Lost to {cat_info['opponents_lost_to']}/{cat_info['unique_opponents']} opponents"})
+
+    # Addict badge (3+ games per day for a week)
+    if cached_data and player.id in cached_data.get('addict', set()):
+        badges.append({"emoji": "💉", "label": "Addict", "color": "danger", "tooltip": "Played 21+ games in a 7-day period (avg 3+ per day)"})
 
     return badges
