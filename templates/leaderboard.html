@@ -11,16 +11,58 @@
                            hx-get="/api/leaderboard"
                            hx-target="#leaderboard-content"
                            hx-include="this"
-                           hx-vals='js:{"min_games": document.getElementById("minGamesToggle").checked ? 5 : 0}'>
+                           hx-vals='js:{"min_games": document.getElementById("minGamesToggle").checked ? 5 : 0, "game_type": getCurrentGameType()}'>
                     <label class="form-check-label" for="minGamesToggle">
                         5+ games only
                     </label>
                 </div>
             </div>
-            <div class="card-body" id="leaderboard-content" hx-get="/api/leaderboard" hx-trigger="load" hx-vals='js:{"min_games": getMinGamesFilter()}'>
-                <div class="text-center">
-                    <div class="spinner-border" role="status">
-                        <span class="visually-hidden">Loading...</span>
+            <div class="card-body">
+                <!-- Game type tabs -->
+                <ul class="nav nav-tabs mb-3" id="gameTypeTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="all-tab" data-game-type="all"
+                                hx-get="/api/leaderboard"
+                                hx-target="#leaderboard-content"
+                                hx-vals='js:{"min_games": getMinGamesFilter(), "game_type": "all"}'
+                                onclick="setActiveTab('all')">
+                            All
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="1v1-tab" data-game-type="1v1"
+                                hx-get="/api/leaderboard"
+                                hx-target="#leaderboard-content"
+                                hx-vals='js:{"min_games": getMinGamesFilter(), "game_type": "1v1"}'
+                                onclick="setActiveTab('1v1')">
+                            1v1
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="2v2-tab" data-game-type="2v2"
+                                hx-get="/api/leaderboard"
+                                hx-target="#leaderboard-content"
+                                hx-vals='js:{"min_games": getMinGamesFilter(), "game_type": "2v2"}'
+                                onclick="setActiveTab('2v2')">
+                            2v2
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="2v1-tab" data-game-type="2v1"
+                                hx-get="/api/leaderboard"
+                                hx-target="#leaderboard-content"
+                                hx-vals='js:{"min_games": getMinGamesFilter(), "game_type": "2v1"}'
+                                onclick="setActiveTab('2v1')">
+                            2v1
+                        </button>
+                    </li>
+                </ul>
+
+                <div id="leaderboard-content" hx-get="/api/leaderboard" hx-trigger="load" hx-vals='js:{"min_games": getMinGamesFilter(), "game_type": getCurrentGameType()}'>
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -73,8 +115,9 @@
 </div>
 
 <script>
-    // localStorage key for the min games filter setting
+    // localStorage keys
     const MIN_GAMES_STORAGE_KEY = 'leaderboard_min_games_filter';
+    const GAME_TYPE_STORAGE_KEY = 'leaderboard_game_type_filter';
 
     // Function to get the min games filter value from localStorage
     function getMinGamesFilter() {
@@ -83,7 +126,31 @@
         return stored === null ? 5 : (stored === 'true' ? 5 : 0);
     }
 
-    // Initialize the toggle state from localStorage on page load
+    // Function to get the current game type filter from localStorage
+    function getCurrentGameType() {
+        const stored = localStorage.getItem(GAME_TYPE_STORAGE_KEY);
+        // Default to 'all' if not set
+        return stored === null ? 'all' : stored;
+    }
+
+    // Function to set the active tab and save to localStorage
+    function setActiveTab(gameType) {
+        // Remove active class from all tabs
+        document.querySelectorAll('#gameTypeTabs .nav-link').forEach(tab => {
+            tab.classList.remove('active');
+        });
+
+        // Add active class to the clicked tab
+        document.getElementById(gameType + '-tab').classList.add('active');
+
+        // Save to localStorage
+        localStorage.setItem(GAME_TYPE_STORAGE_KEY, gameType);
+
+        // Reload the position chart with the new game type
+        loadPositionChart();
+    }
+
+    // Initialize the toggle state and active tab from localStorage on page load
     document.addEventListener('DOMContentLoaded', function() {
         const toggle = document.getElementById('minGamesToggle');
         const stored = localStorage.getItem(MIN_GAMES_STORAGE_KEY);
@@ -95,6 +162,10 @@
             localStorage.setItem(MIN_GAMES_STORAGE_KEY, this.checked);
             loadPositionChart();
         });
+
+        // Restore active tab from localStorage
+        const currentGameType = getCurrentGameType();
+        setActiveTab(currentGameType);
     });
 
     // Initialize tooltips when content is loaded dynamically via htmx
@@ -155,13 +226,14 @@
     // Function to load and render position chart
     function loadPositionChart() {
         const minGames = getMinGamesFilter();
+        const gameType = getCurrentGameType();
 
         // Destroy existing chart if it exists
         if (positionChartInstance) {
             positionChartInstance.destroy();
         }
 
-        fetch(`/api/leaderboard-position-chart?min_games=${minGames}`)
+        fetch(`/api/leaderboard-position-chart?min_games=${minGames}&game_type=${gameType}`)
             .then(response => response.json())
             .then(data => {
                 const ctx = document.getElementById('positionChart').getContext('2d');

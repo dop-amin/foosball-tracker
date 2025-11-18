@@ -7,7 +7,10 @@ db = SQLAlchemy()
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    elo_rating = db.Column(db.Integer, default=1500, nullable=False)
+    elo_rating = db.Column(db.Integer, default=1500, nullable=False)  # Global ELO
+    elo_1v1 = db.Column(db.Integer, default=1500, nullable=False)  # 1v1 specific ELO
+    elo_2v2 = db.Column(db.Integer, default=1500, nullable=False)  # 2v2 specific ELO
+    elo_2v1 = db.Column(db.Integer, default=1500, nullable=False)  # 2v1 specific ELO
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
