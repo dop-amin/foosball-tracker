@@ -1,0 +1,100 @@
+<tr id="game-row-{{ game.id }}" class="table-warning">
+    <td colspan="8">
+        <form hx-post="/api/games/{{ game.id }}"
+              hx-target="#game-row-{{ game.id }}"
+              hx-swap="outerHTML"
+              hx-indicator="#edit-spinner-{{ game.id }}">
+
+            <div class="p-3">
+                <h6 class="mb-3">Edit Game</h6>
+
+                <!-- Game Type -->
+                <div class="row mb-2">
+                    <div class="col-md-4">
+                        <label class="form-label small">Game Type</label>
+                        <select name="game_type" class="form-select form-select-sm" required>
+                            <option value="1v1" {% if game.game_type == '1v1' %}selected{% endif %}>1v1</option>
+                            <option value="2v2" {% if game.game_type == '2v2' %}selected{% endif %}>2v2</option>
+                            <option value="2v1" {% if game.game_type == '2v1' %}selected{% endif %}>2v1</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Times -->
+                <div class="row mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small">Start Time</label>
+                        <input type="datetime-local" name="start_time" class="form-control form-control-sm"
+                               value="{{ game.start_time.strftime('%Y-%m-%dT%H:%M') }}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">End Time (optional)</label>
+                        <input type="datetime-local" name="end_time" class="form-control form-control-sm"
+                               value="{{ game.end_time.strftime('%Y-%m-%dT%H:%M') if game.end_time else '' }}">
+                    </div>
+                </div>
+
+                <!-- Team 1 -->
+                <div class="row mb-2">
+                    <div class="col-md-8">
+                        <label class="form-label small">Black Side Players</label>
+                        <select name="team1_players" class="form-select form-select-sm" multiple required>
+                            {% for player in players %}
+                            <option value="{{ player.id }}"
+                                    {% if player.id in team1_player_ids %}selected{% endif %}>
+                                {{ player.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Score</label>
+                        <input type="number" name="team1_score" class="form-control form-control-sm"
+                               value="{{ game.team1_score }}" min="0" max="11" required>
+                    </div>
+                </div>
+
+                <!-- Team 2 -->
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <label class="form-label small">White Side Players</label>
+                        <select name="team2_players" class="form-select form-select-sm" multiple required>
+                            {% for player in players %}
+                            <option value="{{ player.id }}"
+                                    {% if player.id in team2_player_ids %}selected{% endif %}>
+                                {{ player.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Score</label>
+                        <input type="number" name="team2_score" class="form-control form-control-sm"
+                               value="{{ game.team2_score }}" min="0" max="11" required>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 align-items-center">
+                    <button type="submit" class="btn btn-sm btn-success">Save Changes</button>
+                    <button type="button" class="btn btn-sm btn-secondary"
+                            hx-get="/api/games/{{ game.id }}/cancel-edit"
+                            hx-target="#game-row-{{ game.id }}"
+                            hx-swap="outerHTML">Cancel</button>
+                    <div id="edit-spinner-{{ game.id }}" class="htmx-indicator">
+                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                        <small class="ms-2">Recalculating all data...</small>
+                    </div>
+                </div>
+
+                <!-- Warning Message -->
+                <div class="alert alert-warning mt-3 mb-0">
+                    <small>
+                        <strong>Note:</strong> Editing this game will recalculate ALL player ELO ratings,
+                        cake balances, and leaderboard history to maintain accuracy. This may take a few seconds.
+                    </small>
+                </div>
+            </div>
+        </form>
+    </td>
+</tr>

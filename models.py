@@ -136,3 +136,22 @@ class TournamentMatch(db.Model):
 
     def __repr__(self):
         return f"<TournamentMatch R{self.round_number}M{self.match_number}>"
+
+
+class GameAuditLog(db.Model):
+    """Tracks all edits made to games for transparency."""
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
+    edited_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    editor_ip = db.Column(db.String(45), nullable=True)  # IPv4/IPv6 tracking
+
+    # JSON string storing before/after state
+    changes = db.Column(db.Text, nullable=False)
+
+    # Human-readable summary: "Changed team2 score from 5 to 6, replaced Player X with Player Y on team1"
+    summary = db.Column(db.String(500), nullable=False)
+
+    game = db.relationship("Game", backref="audit_logs")
+
+    def __repr__(self):
+        return f"<GameAuditLog game_id={self.game_id} at {self.edited_at}>"
