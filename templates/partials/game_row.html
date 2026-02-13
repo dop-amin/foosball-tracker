@@ -72,16 +72,11 @@
         {% if game.audit_logs %}
         <button class="btn btn-sm btn-outline-secondary"
                 hx-get="/api/games/{{ game.id }}/history"
-                hx-target="#history-{{ game.id }}"
-                hx-swap="innerHTML"
+                hx-target="#game-row-{{ game.id }}"
+                hx-swap="afterend"
                 title="View edit history">
             History
         </button>
         {% endif %}
     </td>
 </tr>
-{% if game.audit_logs %}
-<tr id="history-{{ game.id }}">
-    <td colspan="8"></td>
-</tr>
-{% endif %}

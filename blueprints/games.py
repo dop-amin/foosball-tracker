@@ -387,3 +387,9 @@ def cancel_edit_game(game_id):
         game=game,
         tournament_game_ids=tournament_game_ids,
     )
+
+
+@games_bp.route("/games/<int:game_id>/hide-history", methods=["GET"])
+def hide_game_history(game_id):
+    """Return empty response to remove history row."""
+    return ""
