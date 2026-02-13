@@ -7,7 +7,7 @@ from models import db, CakeBalance, GameAuditLog
 def update_cake_balance(game):
     """
     Update cake balance for shutout games (10-0).
-    Each loser owes each winner a cake.
+    Each loser owes each winner a cake within the same season.
 
     Args:
         game: Game object with shutout result
@@ -21,18 +21,23 @@ def update_cake_balance(game):
         else:
             losers.append(gp.player_id)
 
-    # Each loser owes each winner a cake
+    # Each loser owes each winner a cake (within the same season)
     for loser_id in losers:
         for winner_id in winners:
             balance = CakeBalance.query.filter_by(
-                debtor_id=loser_id, creditor_id=winner_id
+                season_id=game.season_id,
+                debtor_id=loser_id,
+                creditor_id=winner_id
             ).first()
 
             if balance:
                 balance.balance += 1
             else:
                 balance = CakeBalance(
-                    debtor_id=loser_id, creditor_id=winner_id, balance=1
+                    season_id=game.season_id,
+                    debtor_id=loser_id,
+                    creditor_id=winner_id,
+                    balance=1
                 )
                 db.session.add(balance)
 

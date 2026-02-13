@@ -5,14 +5,22 @@ from sqlalchemy import func, or_
 from models import db, GamePlayer, Game, CakeBalance
 
 
-def calculate_player_streaks(player_id):
-    """Calculate current and best winning streaks for a player."""
-    games = (
+def calculate_player_streaks(player_id, season_id=None):
+    """Calculate current and best winning streaks for a player.
+
+    Args:
+        player_id: The player ID to calculate streaks for
+        season_id: Optional season ID to filter games. If None, uses all games.
+    """
+    query = (
         GamePlayer.query.filter_by(player_id=player_id)
         .join(Game)
-        .order_by(Game.start_time.asc())
-        .all()
     )
+
+    if season_id is not None:
+        query = query.filter(Game.season_id == season_id)
+
+    games = query.order_by(Game.start_time.asc()).all()
 
     if not games:
         return 0, 0
@@ -35,13 +43,14 @@ def calculate_player_streaks(player_id):
     return current_streak, best_streak
 
 
-def precompute_badge_data(player_ids):
+def precompute_badge_data(player_ids, season_id=None):
     """Pre-compute all data needed for badge calculations in bulk.
 
     This reduces N queries to 3-4 queries for all players.
 
     Args:
         player_ids: List of player IDs to compute data for
+        season_id: Optional season ID to filter data. If None, uses all data.
 
     Returns:
         Dictionary with keys 'streaks', 'cake_totals', 'recent_games', 'night_owl', 'early_bird', 'cat_data', 'addict'
@@ -58,15 +67,20 @@ def precompute_badge_data(player_ids):
 
     # Bulk compute streaks for all players
     for player_id in player_ids:
-        cached_data['streaks'][player_id] = calculate_player_streaks(player_id)
+        cached_data['streaks'][player_id] = calculate_player_streaks(player_id, season_id=season_id)
 
     # Bulk query cake totals
-    cake_results = db.session.query(
+    cake_query = db.session.query(
         CakeBalance.creditor_id,
         func.sum(CakeBalance.balance).label('total')
     ).filter(
         CakeBalance.creditor_id.in_(player_ids)
-    ).group_by(CakeBalance.creditor_id).all()
+    )
+
+    if season_id is not None:
+        cake_query = cake_query.filter(CakeBalance.season_id == season_id)
+
+    cake_results = cake_query.group_by(CakeBalance.creditor_id).all()
 
     for creditor_id, total in cake_results:
         cached_data['cake_totals'][creditor_id] = int(total or 0)
@@ -78,7 +92,7 @@ def precompute_badge_data(player_ids):
 
     # Bulk query recent games (last 7 days)
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    recent_results = db.session.query(
+    recent_query = db.session.query(
         GamePlayer.player_id,
         func.count(GamePlayer.id).label('game_count')
     ).join(
@@ -86,7 +100,12 @@ def precompute_badge_data(player_ids):
     ).filter(
         GamePlayer.player_id.in_(player_ids),
         Game.start_time >= seven_days_ago
-    ).group_by(GamePlayer.player_id).all()
+    )
+
+    if season_id is not None:
+        recent_query = recent_query.filter(Game.season_id == season_id)
+
+    recent_results = recent_query.group_by(GamePlayer.player_id).all()
 
     for player_id, game_count in recent_results:
         cached_data['recent_games'][player_id] = int(game_count or 0)
@@ -97,7 +116,7 @@ def precompute_badge_data(player_ids):
             cached_data['recent_games'][player_id] = 0
 
     # Compute Night Owl badge (played between 8pm and 6am)
-    night_owl_games = db.session.query(GamePlayer.player_id).join(
+    night_owl_query = db.session.query(GamePlayer.player_id).join(
         Game, GamePlayer.game_id == Game.id
     ).filter(
         GamePlayer.player_id.in_(player_ids),
@@ -105,18 +124,28 @@ def precompute_badge_data(player_ids):
             func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 20,
             func.cast(func.strftime('%H', Game.start_time), db.Integer) < 6
         )
-    ).distinct().all()
+    )
+
+    if season_id is not None:
+        night_owl_query = night_owl_query.filter(Game.season_id == season_id)
+
+    night_owl_games = night_owl_query.distinct().all()
 
     cached_data['night_owl'] = {player_id for (player_id,) in night_owl_games}
 
     # Compute Early Bird badge (played between 6am and 9am)
-    early_bird_games = db.session.query(GamePlayer.player_id).join(
+    early_bird_query = db.session.query(GamePlayer.player_id).join(
         Game, GamePlayer.game_id == Game.id
     ).filter(
         GamePlayer.player_id.in_(player_ids),
         func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 6,
         func.cast(func.strftime('%H', Game.start_time), db.Integer) < 9
-    ).distinct().all()
+    )
+
+    if season_id is not None:
+        early_bird_query = early_bird_query.filter(Game.season_id == season_id)
+
+    early_bird_games = early_bird_query.distinct().all()
 
     cached_data['early_bird'] = {player_id for (player_id,) in early_bird_games}
 
@@ -129,7 +158,7 @@ def precompute_badge_data(player_ids):
             continue
 
         # Get all games for this player
-        player_games = db.session.query(
+        player_games_query = db.session.query(
             GamePlayer.is_winner,
             GamePlayer.team,
             Game.id.label('game_id')
@@ -137,7 +166,12 @@ def precompute_badge_data(player_ids):
             Game, GamePlayer.game_id == Game.id
         ).filter(
             GamePlayer.player_id == player_id
-        ).all()
+        )
+
+        if season_id is not None:
+            player_games_query = player_games_query.filter(Game.season_id == season_id)
+
+        player_games = player_games_query.all()
 
         if not player_games:
             continue
@@ -201,7 +235,7 @@ def precompute_badge_data(player_ids):
         earliest_business_day = business_days[0]
         latest_business_day = business_days[-1]
 
-        games = db.session.query(
+        games_query = db.session.query(
             Game.start_time
         ).join(
             GamePlayer, GamePlayer.game_id == Game.id
@@ -209,7 +243,12 @@ def precompute_badge_data(player_ids):
             GamePlayer.player_id == player_id,
             func.date(Game.start_time) >= earliest_business_day,
             func.date(Game.start_time) <= latest_business_day
-        ).all()
+        )
+
+        if season_id is not None:
+            games_query = games_query.filter(Game.season_id == season_id)
+
+        games = games_query.all()
 
         if not games:
             continue

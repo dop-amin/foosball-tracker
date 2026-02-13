@@ -9,6 +9,7 @@ from services.elo_service import update_elo_ratings
 from services.game_service import update_cake_balance, create_game_audit_entry
 from services.leaderboard_service import create_daily_snapshot
 from services.recalculation_service import recalculate_all_derived_data
+from services.season_service import get_season_for_date, get_current_season
 
 games_bp = Blueprint("games", __name__)
 
@@ -69,8 +70,12 @@ def add_game():
                 200,
             )
 
+        # Assign game to correct season based on start_time
+        season = get_season_for_date(start_time)
+
         # Create game
         game = Game(
+            season_id=season.id,
             game_type=game_type,
             start_time=start_time,
             end_time=end_time,
@@ -124,9 +129,9 @@ def add_game():
 
         db.session.commit()
 
-        # Create daily snapshot after committing the game
+        # Create daily snapshot for the game's season after committing the game
         try:
-            create_daily_snapshot()
+            create_daily_snapshot(season_id=game.season_id)
         except Exception as snapshot_error:
             # Log error but don't fail the game creation
             print(f"Warning: Failed to create daily snapshot: {snapshot_error}")
@@ -231,7 +236,8 @@ def update_game(game_id):
                 200,
             )
 
-        # Capture before state
+        # Capture before state (including season for potential reassignment)
+        old_season_id = game.season_id
         before_data = {
             'scores': {'team1': game.team1_score, 'team2': game.team2_score},
             'players': {
@@ -300,7 +306,11 @@ def update_game(game_id):
             'end_time': end_time.isoformat() if end_time else None,
         }
 
+        # Reassign game to correct season if start_time changed
+        new_season = get_season_for_date(start_time)
+
         # Update game record
+        game.season_id = new_season.id
         game.game_type = game_type
         game.start_time = start_time
         game.end_time = end_time
@@ -341,8 +351,19 @@ def update_game(game_id):
         # Commit the game update and audit log before recalculation
         db.session.commit()
 
-        # Recalculate all derived data
-        recalculate_all_derived_data()
+        # Recalculate derived data for affected seasons
+        if old_season_id == new_season.id:
+            # Game stayed in same season, just recalculate that season
+            recalculate_all_derived_data(season_id=new_season.id)
+        else:
+            # Game moved to different season, recalculate both seasons
+            recalculate_all_derived_data(season_id=old_season_id)
+            recalculate_all_derived_data(season_id=new_season.id)
+
+            # Also recalculate current season if it's different from both
+            current_season = get_current_season()
+            if current_season.id not in [old_season_id, new_season.id]:
+                recalculate_all_derived_data(season_id=current_season.id)
 
         # Reload game to get updated relationships
         db.session.refresh(game)
