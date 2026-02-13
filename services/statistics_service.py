@@ -5,14 +5,22 @@ from sqlalchemy import func, or_
 from models import db, GamePlayer, Game, CakeBalance
 
 
-def calculate_player_streaks(player_id):
-    """Calculate current and best winning streaks for a player."""
-    games = (
+def calculate_player_streaks(player_id, game_type=None):
+    """Calculate current and best winning streaks for a player.
+
+    Args:
+        player_id: The player ID
+        game_type: Optional game type filter ('1v1', '2v2', '2v1', or None for all)
+    """
+    query = (
         GamePlayer.query.filter_by(player_id=player_id)
         .join(Game)
-        .order_by(Game.start_time.asc())
-        .all()
     )
+
+    if game_type:
+        query = query.filter(Game.game_type == game_type)
+
+    games = query.order_by(Game.start_time.asc()).all()
 
     if not games:
         return 0, 0
@@ -35,13 +43,14 @@ def calculate_player_streaks(player_id):
     return current_streak, best_streak
 
 
-def precompute_badge_data(player_ids):
+def precompute_badge_data(player_ids, game_type=None):
     """Pre-compute all data needed for badge calculations in bulk.
 
     This reduces N queries to 3-4 queries for all players.
 
     Args:
         player_ids: List of player IDs to compute data for
+        game_type: Optional game type filter ('1v1', '2v2', '2v1', or None for all)
 
     Returns:
         Dictionary with keys 'streaks', 'cake_totals', 'recent_games', 'night_owl', 'early_bird', 'cat_data', 'addict'
@@ -58,27 +67,67 @@ def precompute_badge_data(player_ids):
 
     # Bulk compute streaks for all players
     for player_id in player_ids:
-        cached_data['streaks'][player_id] = calculate_player_streaks(player_id)
+        cached_data['streaks'][player_id] = calculate_player_streaks(player_id, game_type)
 
     # Bulk query cake totals
-    cake_results = db.session.query(
-        CakeBalance.creditor_id,
-        func.sum(CakeBalance.balance).label('total')
-    ).filter(
-        CakeBalance.creditor_id.in_(player_ids)
-    ).group_by(CakeBalance.creditor_id).all()
+    # When filtering by game type, we need to recalculate based on shutouts in that game type only
+    if game_type:
+        # Get all shutout games (10-0) for this game type
+        shutout_games_query = db.session.query(
+            Game.id,
+            Game.team1_score,
+            Game.team2_score
+        ).filter(
+            Game.game_type == game_type,
+            or_(
+                Game.team1_score - Game.team2_score >= 10,
+                Game.team2_score - Game.team1_score >= 10
+            )
+        ).all()
 
-    for creditor_id, total in cake_results:
-        cached_data['cake_totals'][creditor_id] = int(total or 0)
+        # Calculate cake balances from these shutout games
+        game_type_cake_totals = {}
+        for game_id, team1_score, team2_score in shutout_games_query:
+            # Get winners and losers from this game
+            game_players = db.session.query(
+                GamePlayer.player_id,
+                GamePlayer.is_winner
+            ).filter(
+                GamePlayer.game_id == game_id
+            ).all()
 
-    # Ensure all players have an entry (even if 0)
-    for player_id in player_ids:
-        if player_id not in cached_data['cake_totals']:
-            cached_data['cake_totals'][player_id] = 0
+            winners = [p.player_id for p in game_players if p.is_winner]
+            losers = [p.player_id for p in game_players if not p.is_winner]
+
+            # Each winner is owed a cake by each loser
+            for winner_id in winners:
+                if winner_id not in game_type_cake_totals:
+                    game_type_cake_totals[winner_id] = 0
+                game_type_cake_totals[winner_id] += len(losers)
+
+        # Store in cached_data
+        for player_id in player_ids:
+            cached_data['cake_totals'][player_id] = game_type_cake_totals.get(player_id, 0)
+    else:
+        # For "all" game types, use the existing CakeBalance table
+        cake_results = db.session.query(
+            CakeBalance.creditor_id,
+            func.sum(CakeBalance.balance).label('total')
+        ).filter(
+            CakeBalance.creditor_id.in_(player_ids)
+        ).group_by(CakeBalance.creditor_id).all()
+
+        for creditor_id, total in cake_results:
+            cached_data['cake_totals'][creditor_id] = int(total or 0)
+
+        # Ensure all players have an entry (even if 0)
+        for player_id in player_ids:
+            if player_id not in cached_data['cake_totals']:
+                cached_data['cake_totals'][player_id] = 0
 
     # Bulk query recent games (last 7 days)
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    recent_results = db.session.query(
+    recent_query = db.session.query(
         GamePlayer.player_id,
         func.count(GamePlayer.id).label('game_count')
     ).join(
@@ -86,7 +135,12 @@ def precompute_badge_data(player_ids):
     ).filter(
         GamePlayer.player_id.in_(player_ids),
         Game.start_time >= seven_days_ago
-    ).group_by(GamePlayer.player_id).all()
+    )
+
+    if game_type:
+        recent_query = recent_query.filter(Game.game_type == game_type)
+
+    recent_results = recent_query.group_by(GamePlayer.player_id).all()
 
     for player_id, game_count in recent_results:
         cached_data['recent_games'][player_id] = int(game_count or 0)
@@ -97,7 +151,7 @@ def precompute_badge_data(player_ids):
             cached_data['recent_games'][player_id] = 0
 
     # Compute Night Owl badge (played between 8pm and 6am)
-    night_owl_games = db.session.query(GamePlayer.player_id).join(
+    night_owl_query = db.session.query(GamePlayer.player_id).join(
         Game, GamePlayer.game_id == Game.id
     ).filter(
         GamePlayer.player_id.in_(player_ids),
@@ -105,19 +159,27 @@ def precompute_badge_data(player_ids):
             func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 20,
             func.cast(func.strftime('%H', Game.start_time), db.Integer) < 6
         )
-    ).distinct().all()
+    )
 
+    if game_type:
+        night_owl_query = night_owl_query.filter(Game.game_type == game_type)
+
+    night_owl_games = night_owl_query.distinct().all()
     cached_data['night_owl'] = {player_id for (player_id,) in night_owl_games}
 
     # Compute Early Bird badge (played between 6am and 9am)
-    early_bird_games = db.session.query(GamePlayer.player_id).join(
+    early_bird_query = db.session.query(GamePlayer.player_id).join(
         Game, GamePlayer.game_id == Game.id
     ).filter(
         GamePlayer.player_id.in_(player_ids),
         func.cast(func.strftime('%H', Game.start_time), db.Integer) >= 6,
         func.cast(func.strftime('%H', Game.start_time), db.Integer) < 9
-    ).distinct().all()
+    )
 
+    if game_type:
+        early_bird_query = early_bird_query.filter(Game.game_type == game_type)
+
+    early_bird_games = early_bird_query.distinct().all()
     cached_data['early_bird'] = {player_id for (player_id,) in early_bird_games}
 
     # Compute Cat badge (lost to at least 90% of ALL other players)
@@ -129,7 +191,7 @@ def precompute_badge_data(player_ids):
             continue
 
         # Get all games for this player
-        player_games = db.session.query(
+        player_games_query = db.session.query(
             GamePlayer.is_winner,
             GamePlayer.team,
             Game.id.label('game_id')
@@ -137,7 +199,12 @@ def precompute_badge_data(player_ids):
             Game, GamePlayer.game_id == Game.id
         ).filter(
             GamePlayer.player_id == player_id
-        ).all()
+        )
+
+        if game_type:
+            player_games_query = player_games_query.filter(Game.game_type == game_type)
+
+        player_games = player_games_query.all()
 
         if not player_games:
             continue
@@ -201,7 +268,7 @@ def precompute_badge_data(player_ids):
         earliest_business_day = business_days[0]
         latest_business_day = business_days[-1]
 
-        games = db.session.query(
+        games_query = db.session.query(
             Game.start_time
         ).join(
             GamePlayer, GamePlayer.game_id == Game.id
@@ -209,7 +276,12 @@ def precompute_badge_data(player_ids):
             GamePlayer.player_id == player_id,
             func.date(Game.start_time) >= earliest_business_day,
             func.date(Game.start_time) <= latest_business_day
-        ).all()
+        )
+
+        if game_type:
+            games_query = games_query.filter(Game.game_type == game_type)
+
+        games = games_query.all()
 
         if not games:
             continue
@@ -228,7 +300,7 @@ def precompute_badge_data(player_ids):
     return cached_data
 
 
-def calculate_badges(player_stats, all_players_stats, cached_data=None):
+def calculate_badges(player_stats, all_players_stats, cached_data=None, game_type=None):
     """Calculate achievement badges for a player based on their stats.
 
     Args:
@@ -238,6 +310,7 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
             - 'streaks': dict mapping player_id to (current_streak, best_streak)
             - 'cake_totals': dict mapping player_id to total_cakes
             - 'recent_games': dict mapping player_id to recent game count
+        game_type: Optional game type filter ('1v1', '2v2', '2v1', or None for all)
     """
     badges = []
     player = player_stats["player"]
@@ -250,7 +323,7 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
     if 'streaks' in cached_data:
         current_streak, best_streak = cached_data['streaks'].get(player.id, (0, 0))
     else:
-        current_streak, best_streak = calculate_player_streaks(player.id)
+        current_streak, best_streak = calculate_player_streaks(player.id, game_type)
 
     if current_streak >= 10:
         badges.append({"emoji": "💥", "label": "Unstoppable", "color": "danger", "tooltip": f"Currently on a {current_streak} game winning streak!"})
@@ -289,21 +362,70 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
         total_cakes = cached_data['cake_totals'].get(player.id, 0)
         all_cake_totals = list(cached_data['cake_totals'].values())
     else:
-        cake_query = (
-            db.session.query(db.func.sum(CakeBalance.balance))
-            .filter_by(creditor_id=player.id)
-            .scalar()
-        )
-        total_cakes = cake_query or 0
-        # Fallback: query all cake totals individually (not optimal but maintains semantics)
-        all_cake_totals = []
-        for p_stat in all_players_stats:
-            p_cakes = (
+        # Fallback: recalculate based on game type if specified
+        if game_type:
+            # Get all shutout games for this player and game type
+            shutout_games = db.session.query(Game.id).join(
+                GamePlayer
+            ).filter(
+                GamePlayer.player_id == player.id,
+                GamePlayer.is_winner == True,
+                Game.game_type == game_type,
+                or_(
+                    Game.team1_score - Game.team2_score >= 10,
+                    Game.team2_score - Game.team1_score >= 10
+                )
+            ).all()
+
+            total_cakes = 0
+            for (game_id,) in shutout_games:
+                # Count losers in this game
+                losers_count = GamePlayer.query.filter_by(
+                    game_id=game_id,
+                    is_winner=False
+                ).count()
+                total_cakes += losers_count
+
+            # Calculate for all players
+            all_cake_totals = []
+            for p_stat in all_players_stats:
+                p_shutout_games = db.session.query(Game.id).join(
+                    GamePlayer
+                ).filter(
+                    GamePlayer.player_id == p_stat["player"].id,
+                    GamePlayer.is_winner == True,
+                    Game.game_type == game_type,
+                    or_(
+                        Game.team1_score - Game.team2_score >= 10,
+                        Game.team2_score - Game.team1_score >= 10
+                    )
+                ).all()
+
+                p_cakes = 0
+                for (game_id,) in p_shutout_games:
+                    losers_count = GamePlayer.query.filter_by(
+                        game_id=game_id,
+                        is_winner=False
+                    ).count()
+                    p_cakes += losers_count
+                all_cake_totals.append(p_cakes)
+        else:
+            # For "all" game types, use CakeBalance table
+            cake_query = (
                 db.session.query(db.func.sum(CakeBalance.balance))
-                .filter_by(creditor_id=p_stat["player"].id)
-                .scalar() or 0
+                .filter_by(creditor_id=player.id)
+                .scalar()
             )
-            all_cake_totals.append(p_cakes)
+            total_cakes = cake_query or 0
+            # Fallback: query all cake totals individually (not optimal but maintains semantics)
+            all_cake_totals = []
+            for p_stat in all_players_stats:
+                p_cakes = (
+                    db.session.query(db.func.sum(CakeBalance.balance))
+                    .filter_by(creditor_id=p_stat["player"].id)
+                    .scalar() or 0
+                )
+                all_cake_totals.append(p_cakes)
 
     if total_cakes > 0 and all_cake_totals and total_cakes == max(all_cake_totals):
         badges.append({"emoji": "🎂", "label": "Cake King", "color": "light", "tooltip": f"Most cakes owed by opponents: {total_cakes} cake{'s' if total_cakes != 1 else ''}"})
@@ -336,22 +458,28 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
         all_recent_games = list(cached_data['recent_games'].values())
     else:
         seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        recent_games = (
+        recent_query = (
             GamePlayer.query.filter_by(player_id=player.id)
             .join(Game)
             .filter(Game.start_time >= seven_days_ago)
-            .count()
         )
+        if game_type:
+            recent_query = recent_query.filter(Game.game_type == game_type)
+
+        recent_games = recent_query.count()
+
         # Fallback: query all recent games individually (not optimal but maintains semantics)
         all_recent_games = []
         for p_stat in all_players_stats:
-            p_recent = (
+            p_recent_query = (
                 GamePlayer.query.filter_by(player_id=p_stat["player"].id)
                 .join(Game)
                 .filter(Game.start_time >= seven_days_ago)
-                .count()
             )
-            all_recent_games.append(p_recent)
+            if game_type:
+                p_recent_query = p_recent_query.filter(Game.game_type == game_type)
+
+            all_recent_games.append(p_recent_query.count())
 
     if recent_games >= 5 and all_recent_games and recent_games == max(all_recent_games):
         badges.append({"emoji": "📈", "label": "Marathon", "color": "info", "tooltip": f"Most active player: {recent_games} games in the last 7 days"})

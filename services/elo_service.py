@@ -37,6 +37,7 @@ def calculate_elo_change(
 def update_elo_ratings(game):
     """
     Update ELO ratings for all players in a game and store ELO changes.
+    Updates both global ELO and game-type-specific ELO ratings.
     """
     # Get team players and their GamePlayer records
     team1_players = []
@@ -53,34 +54,54 @@ def update_elo_ratings(game):
             team2_players.append(player)
             team2_game_players.append(gp)
 
-    # Calculate average team ratings
-    team1_avg_rating = sum(p.elo_rating for p in team1_players) / len(team1_players)
-    team2_avg_rating = sum(p.elo_rating for p in team2_players) / len(team2_players)
+    # Get the appropriate ELO field name for this game type
+    game_type_elo_field = f"elo_{game.game_type}"
 
-    # Calculate ELO changes
-    team1_change, team2_change = calculate_elo_change(
-        team1_avg_rating, team2_avg_rating, game.team1_score, game.team2_score
+    # Calculate average team ratings for global ELO
+    team1_avg_rating_global = sum(p.elo_rating for p in team1_players) / len(team1_players)
+    team2_avg_rating_global = sum(p.elo_rating for p in team2_players) / len(team2_players)
+
+    # Calculate average team ratings for game-type-specific ELO
+    team1_avg_rating_specific = sum(getattr(p, game_type_elo_field) for p in team1_players) / len(team1_players)
+    team2_avg_rating_specific = sum(getattr(p, game_type_elo_field) for p in team2_players) / len(team2_players)
+
+    # Calculate ELO changes for global rating
+    team1_change_global, team2_change_global = calculate_elo_change(
+        team1_avg_rating_global, team2_avg_rating_global, game.team1_score, game.team2_score
     )
 
-    # Update player ratings and store ELO changes
+    # Calculate ELO changes for game-type-specific rating
+    team1_change_specific, team2_change_specific = calculate_elo_change(
+        team1_avg_rating_specific, team2_avg_rating_specific, game.team1_score, game.team2_score
+    )
+
+    # Update player ratings (both global and game-type-specific) and store ELO changes
     for i, player in enumerate(team1_players):
-        player.elo_rating += team1_change
-        team1_game_players[i].elo_change = team1_change
+        player.elo_rating += team1_change_global
+        current_specific = getattr(player, game_type_elo_field)
+        setattr(player, game_type_elo_field, current_specific + team1_change_specific)
+        team1_game_players[i].elo_change = team1_change_global
 
     for i, player in enumerate(team2_players):
-        player.elo_rating += team2_change
-        team2_game_players[i].elo_change = team2_change
+        player.elo_rating += team2_change_global
+        current_specific = getattr(player, game_type_elo_field)
+        setattr(player, game_type_elo_field, current_specific + team2_change_specific)
+        team2_game_players[i].elo_change = team2_change_global
 
 
 def recalculate_all_elo_ratings():
     """
     Recalculate ELO ratings for all players from scratch by replaying all games.
     This is useful for initializing ELO ratings or fixing inconsistencies.
+    Updates both global and game-type-specific ELO ratings.
     """
-    # Reset all player ratings to 1500
+    # Reset all player ratings to 1500 (global and game-type-specific)
     players = Player.query.all()
     for player in players:
         player.elo_rating = 1500
+        player.elo_1v1 = 1500
+        player.elo_2v2 = 1500
+        player.elo_2v1 = 1500
 
     # Get all games in chronological order
     games = Game.query.order_by(Game.start_time).all()
