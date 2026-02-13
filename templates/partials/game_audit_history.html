@@ -1,0 +1,29 @@
+{% if audit_logs %}
+<div class="card mt-2">
+    <div class="card-header bg-light">
+        <h6 class="mb-0">Edit History</h6>
+    </div>
+    <div class="card-body p-2">
+        {% for log in audit_logs %}
+        <div class="border-start border-3 border-primary ps-3 mb-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <strong>{{ log.summary }}</strong>
+                    <br>
+                    <small class="text-muted">
+                        {{ log.edited_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% if log.editor_ip %} from {{ log.editor_ip }}{% endif %}
+                    </small>
+                </div>
+            </div>
+            <details class="mt-2">
+                <summary class="text-primary" style="cursor: pointer;">View detailed changes</summary>
+                <pre class="mt-2 p-2 bg-light small">{{ log.changes | safe }}</pre>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<p class="text-muted"><small>No edit history available for this game.</small></p>
+{% endif %}
