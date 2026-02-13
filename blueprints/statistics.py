@@ -3,18 +3,43 @@
 from flask import Blueprint, render_template, request, jsonify
 from datetime import datetime, timedelta
 from collections import defaultdict
-from models import db, Player, Game, GamePlayer, CakeBalance, LeaderboardHistory
+from models import db, Player, Game, GamePlayer, CakeBalance, LeaderboardHistory, Season
+from services.season_service import get_current_season
 
 statistics_bp = Blueprint("statistics", __name__)
 
 
+def get_selected_season():
+    """Helper to get season from query params or default to current."""
+    season_param = request.args.get("season", "current")
+
+    if season_param == "current":
+        return get_current_season(), "current"
+    elif season_param == "all-time":
+        return None, "all-time"
+    else:
+        try:
+            season_id = int(season_param)
+            season = Season.query.get_or_404(season_id)
+            return season, season_id
+        except (ValueError, TypeError):
+            return get_current_season(), "current"
+
+
 @statistics_bp.route("/quick-stats")
 def get_quick_stats():
-    total_players = Player.query.count()
-    total_games = Game.query.count()
+    # Get selected season filter
+    season, season_selected = get_selected_season()
 
-    # Count shutouts (10-point difference)
-    all_games = Game.query.all()
+    total_players = Player.query.count()
+
+    # Filter games by season
+    games_query = Game.query
+    if season is not None:
+        games_query = games_query.filter(Game.season_id == season.id)
+
+    total_games = games_query.count()
+    all_games = games_query.all()
     total_shutouts = sum(1 for game in all_games if game.is_shutout)
 
     stats = {

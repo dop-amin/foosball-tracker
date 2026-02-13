@@ -72,9 +72,15 @@ def update_elo_ratings(game):
         team2_game_players[i].elo_change = team2_change
 
 
-def recalculate_all_elo_ratings():
+def recalculate_all_elo_ratings(season_id=None):
     """
-    Recalculate ELO ratings for all players from scratch by replaying all games.
+    Recalculate ELO ratings for all players from scratch by replaying games.
+
+    Args:
+        season_id: Optional season ID to filter games. If provided, only games
+                   in that season are processed. If None, all games are processed
+                   for all-time view.
+
     This is useful for initializing ELO ratings or fixing inconsistencies.
     """
     # Reset all player ratings to 1500
@@ -82,8 +88,12 @@ def recalculate_all_elo_ratings():
     for player in players:
         player.elo_rating = 1500
 
-    # Get all games in chronological order
-    games = Game.query.order_by(Game.start_time).all()
+    # Get games in chronological order, optionally filtered by season
+    query = Game.query.order_by(Game.start_time)
+    if season_id is not None:
+        query = query.filter_by(season_id=season_id)
+
+    games = query.all()
 
     # Replay each game to update ELO ratings
     for game in games:

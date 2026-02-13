@@ -6,12 +6,13 @@ from models import db, Player, GamePlayer, LeaderboardHistory, Game
 from services.elo_service import calculate_elo_change
 
 
-def create_daily_snapshot(snapshot_date=None):
+def create_daily_snapshot(season_id, snapshot_date=None):
     """
-    Create a daily snapshot of the leaderboard for all players.
+    Create a daily snapshot of the leaderboard for all players in a season.
     Stores each player's rank, ELO rating, and total games count.
 
     Args:
+        season_id: Season ID to create snapshot for
         snapshot_date: Date to create snapshot for (defaults to today)
     """
     if snapshot_date is None:
@@ -22,9 +23,13 @@ def create_daily_snapshot(snapshot_date=None):
     players = Player.query.all()
 
     for player in players:
-        total_games = GamePlayer.query.filter_by(player_id=player.id).count()
+        # Count games for this player in this season
+        total_games = db.session.query(GamePlayer).join(Game).filter(
+            GamePlayer.player_id == player.id,
+            Game.season_id == season_id
+        ).count()
 
-        # Only include players who have played at least one game
+        # Only include players who have played at least one game in this season
         if total_games > 0:
             players_stats.append({
                 "player_id": player.id,
@@ -40,6 +45,7 @@ def create_daily_snapshot(snapshot_date=None):
         # Check if snapshot already exists
         existing = LeaderboardHistory.query.filter_by(
             player_id=player_stat["player_id"],
+            season_id=season_id,
             snapshot_date=snapshot_date
         ).first()
 
@@ -52,6 +58,7 @@ def create_daily_snapshot(snapshot_date=None):
             # Create new snapshot
             snapshot = LeaderboardHistory(
                 player_id=player_stat["player_id"],
+                season_id=season_id,
                 snapshot_date=snapshot_date,
                 rank=rank,
                 elo_rating=player_stat["elo_rating"],
@@ -62,28 +69,39 @@ def create_daily_snapshot(snapshot_date=None):
     db.session.commit()
 
 
-def recalculate_historical_snapshots():
+def recalculate_historical_snapshots(season_id=None):
     """
-    Recalculate all historical leaderboard snapshots from game history.
-    Clears existing snapshots and rebuilds them by replaying all games.
+    Recalculate historical leaderboard snapshots from game history.
+    Clears existing snapshots (for the season if specified) and rebuilds them by replaying games.
     Creates one snapshot per day where games were played.
+
+    Args:
+        season_id: Optional season ID to filter games. If provided, only processes
+                   games from that season. If None, processes all games.
     """
-    # Clear existing snapshots
-    LeaderboardHistory.query.delete()
+    # Clear existing snapshots for this season
+    if season_id is not None:
+        LeaderboardHistory.query.filter_by(season_id=season_id).delete()
+    else:
+        LeaderboardHistory.query.delete()
 
     # Reset all player ratings to 1500
     players = Player.query.all()
     player_elo = {player.id: 1500 for player in players}
     player_games_count = {player.id: 0 for player in players}
 
-    # Get all games in chronological order
-    games = Game.query.order_by(Game.start_time).all()
+    # Get games in chronological order, optionally filtered by season
+    query = Game.query.order_by(Game.start_time)
+    if season_id is not None:
+        query = query.filter_by(season_id=season_id)
+
+    games = query.all()
 
     if not games:
         db.session.commit()
         return
 
-    # Group games by date
+    # Group games by date and season
     games_by_date = defaultdict(list)
     for game in games:
         game_date = game.start_time.date()
@@ -125,6 +143,9 @@ def recalculate_historical_snapshots():
                 player_elo[pid] += team2_change
 
         # Create snapshot for this date (after all games for the day)
+        # Use the season_id from the first game on this date
+        snapshot_season_id = games_by_date[game_date][0].season_id if season_id is None else season_id
+
         players_stats = []
         for player_id, elo_rating in player_elo.items():
             games_count = player_games_count.get(player_id, 0)
@@ -142,6 +163,7 @@ def recalculate_historical_snapshots():
         for rank, player_stat in enumerate(players_stats, start=1):
             snapshot = LeaderboardHistory(
                 player_id=player_stat["player_id"],
+                season_id=snapshot_season_id,
                 snapshot_date=game_date,
                 rank=rank,
                 elo_rating=player_stat["elo_rating"],

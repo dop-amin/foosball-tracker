@@ -6,18 +6,34 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">🏆 Leaderboard</h5>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="minGamesToggle"
-                           hx-get="/api/leaderboard"
-                           hx-target="#leaderboard-content"
-                           hx-include="this"
-                           hx-vals='js:{"min_games": document.getElementById("minGamesToggle").checked ? 5 : 0}'>
-                    <label class="form-check-label" for="minGamesToggle">
-                        5+ games only
-                    </label>
+                <div class="d-flex gap-3 align-items-center">
+                    <!-- Season Selector -->
+                    <div class="form-group mb-0">
+                        <label for="seasonSelector" class="form-label mb-0 me-2 small">Season:</label>
+                        <select id="seasonSelector" class="form-select form-select-sm d-inline-block" style="width: auto;"
+                                hx-get="/api/leaderboard"
+                                hx-target="#leaderboard-content"
+                                hx-include="#minGamesToggle"
+                                hx-vals='js:{"min_games": document.getElementById("minGamesToggle").checked ? 5 : 0, "season": document.getElementById("seasonSelector").value}'>
+                            <option value="current">Current Season</option>
+                            <option value="all-time">All Time</option>
+                        </select>
+                    </div>
+
+                    <!-- Min Games Toggle -->
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="minGamesToggle"
+                               hx-get="/api/leaderboard"
+                               hx-target="#leaderboard-content"
+                               hx-include="#seasonSelector"
+                               hx-vals='js:{"min_games": document.getElementById("minGamesToggle").checked ? 5 : 0, "season": document.getElementById("seasonSelector").value}'>
+                        <label class="form-check-label" for="minGamesToggle">
+                            5+ games only
+                        </label>
+                    </div>
                 </div>
             </div>
-            <div class="card-body" id="leaderboard-content" hx-get="/api/leaderboard" hx-trigger="load" hx-vals='js:{"min_games": getMinGamesFilter()}'>
+            <div class="card-body" id="leaderboard-content" hx-get="/api/leaderboard" hx-trigger="load" hx-vals='js:{"min_games": (localStorage.getItem("leaderboard_min_games_filter") === "false" ? 0 : 5), "season": (localStorage.getItem("leaderboard_season_filter") || "current")}'>
                 <div class="text-center">
                     <div class="spinner-border" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -73,14 +89,25 @@
 </div>
 
 <script>
-    // localStorage key for the min games filter setting
+    // localStorage keys
     const MIN_GAMES_STORAGE_KEY = 'leaderboard_min_games_filter';
+    const SEASON_STORAGE_KEY = 'leaderboard_season_filter';
 
     // Function to get the min games filter value from localStorage
     function getMinGamesFilter() {
         const stored = localStorage.getItem(MIN_GAMES_STORAGE_KEY);
         // Default to true (5 games minimum) if not set
         return stored === null ? 5 : (stored === 'true' ? 5 : 0);
+    }
+
+    // Function to get the season filter value from localStorage
+    function getSeasonFilter() {
+        return localStorage.getItem(SEASON_STORAGE_KEY) || 'current';
+    }
+
+    // Function to save season filter to localStorage
+    function saveSeasonFilter(value) {
+        localStorage.setItem(SEASON_STORAGE_KEY, value);
     }
 
     // Initialize the toggle state from localStorage on page load
@@ -95,6 +122,52 @@
             localStorage.setItem(MIN_GAMES_STORAGE_KEY, this.checked);
             loadPositionChart();
         });
+
+        // Load season options from API
+        fetch('/api/season-options')
+            .then(response => response.json())
+            .then(data => {
+                const selector = document.getElementById('seasonSelector');
+                // Clear existing options
+                selector.innerHTML = '';
+
+                // Add current season option
+                const currentOpt = document.createElement('option');
+                currentOpt.value = 'current';
+                const currentSeasonName = data.seasons.find(s => s.is_current)?.name || '';
+                currentOpt.textContent = `Current Season${currentSeasonName ? ' (' + currentSeasonName + ')' : ''}`;
+                selector.appendChild(currentOpt);
+
+                // Add all-time option
+                const allTimeOpt = document.createElement('option');
+                allTimeOpt.value = 'all-time';
+                allTimeOpt.textContent = 'All Time';
+                selector.appendChild(allTimeOpt);
+
+                // Add past seasons if any
+                const pastSeasons = data.seasons.filter(s => !s.is_current);
+                if (pastSeasons.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = 'Past Seasons';
+                    pastSeasons.forEach(season => {
+                        const opt = document.createElement('option');
+                        opt.value = season.id;
+                        opt.textContent = season.name;
+                        optgroup.appendChild(opt);
+                    });
+                    selector.appendChild(optgroup);
+                }
+
+                // Restore saved selection
+                selector.value = getSeasonFilter();
+
+                // Save on change and reload chart
+                selector.addEventListener('change', function() {
+                    saveSeasonFilter(this.value);
+                    loadPositionChart();
+                });
+            })
+            .catch(error => console.error('Error loading season options:', error));
     });
 
     // Initialize tooltips when content is loaded dynamically via htmx
@@ -155,13 +228,14 @@
     // Function to load and render position chart
     function loadPositionChart() {
         const minGames = getMinGamesFilter();
+        const season = getSeasonFilter();
 
         // Destroy existing chart if it exists
         if (positionChartInstance) {
             positionChartInstance.destroy();
         }
 
-        fetch(`/api/leaderboard-position-chart?min_games=${minGames}`)
+        fetch(`/api/leaderboard-position-chart?min_games=${minGames}&season=${season}`)
             .then(response => response.json())
             .then(data => {
                 const ctx = document.getElementById('positionChart').getContext('2d');

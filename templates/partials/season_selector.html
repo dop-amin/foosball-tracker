@@ -1,0 +1,17 @@
+<select id="seasonSelector" class="form-select form-select-sm" name="season">
+    <option value="current" {% if selected == 'current' %}selected{% endif %}>
+        Current Season{% if current_season %} ({{ current_season.name }}){% endif %}
+    </option>
+    <option value="all-time" {% if selected == 'all-time' %}selected{% endif %}>
+        All Time
+    </option>
+    {% if past_seasons %}
+    <optgroup label="Past Seasons">
+        {% for season in past_seasons %}
+        <option value="{{ season.id }}" {% if selected == season.id|string %}selected{% endif %}>
+            {{ season.name }}
+        </option>
+        {% endfor %}
+    </optgroup>
+    {% endif %}
+</select>
