@@ -35,6 +35,7 @@ instance/
 # Environment variables
 .env
 .env.local
+.direnv/
 
 # IDE
 .vscode/

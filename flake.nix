@@ -165,9 +165,28 @@
 
                 # Security hardening
                 PrivateTmp = true;
+                PrivateDevices = true;
+                PrivateUsers = true;
                 ProtectSystem = "strict";
                 ProtectHome = true;
+                ProtectKernelTunables = true;
+                ProtectKernelModules = true;
+                ProtectKernelLogs = true;
+                ProtectControlGroups = true;
+                ProtectHostname = true;
+                ProtectClock = true;
+                ProtectProc = "invisible";
+                ProcSubset = "pid";
+                RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+                RestrictNamespaces = true;
+                RestrictRealtime = true;
+                RestrictSUIDSGID = true;
+                LockPersonality = true;
                 NoNewPrivileges = true;
+                CapabilityBoundingSet = "";
+                SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+                SystemCallArchitectures = "native";
+                UMask = "0077";
                 ReadWritePaths = cfg.dataDir;
 
                 # Environment variables
