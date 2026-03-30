@@ -38,13 +38,7 @@ def get_quarter_boundaries(year, quarter):
         end_day = 31
     else:
         end_month = start_month + 2
-        if end_month == 3:
-            # February - handle leap years
-            if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
-                end_day = 29
-            else:
-                end_day = 28
-        elif end_month in [1, 3, 5, 7, 8, 10, 12]:
+        if end_month in [1, 3, 5, 7, 8, 10, 12]:
             end_day = 31
         else:
             end_day = 30
