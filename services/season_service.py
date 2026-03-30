@@ -57,16 +57,20 @@ def get_quarter_boundaries(year, quarter):
 
 def create_season(year, quarter):
     """
-    Creates a new season for the given year and quarter.
+    Creates a new season for the given year and quarter, or returns the existing one.
 
     Args:
         year: int
         quarter: int (1-4)
 
     Returns:
-        Season: The newly created season
+        Season: The newly created or existing season
     """
     name = f"Q{quarter} {year}"
+    existing = Season.query.filter_by(name=name).first()
+    if existing:
+        return existing
+
     start_date, end_date = get_quarter_boundaries(year, quarter)
 
     season = Season(
