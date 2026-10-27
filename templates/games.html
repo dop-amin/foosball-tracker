@@ -106,12 +106,21 @@
 </div>
 
 <script>
+// Time fields follow the clock until the user edits them
+const TIME_FIELD_IDS = ['startTime', 'endTime'];
+const editedTimeFields = new Set();
+
 function setCurrentTime() {
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const isoString = now.toISOString().slice(0, 16);
-    document.getElementById('startTime').value = isoString;
-    document.getElementById('endTime').value = isoString;
+    TIME_FIELD_IDS.forEach(id => {
+        const field = document.getElementById(id);
+        // Don't overwrite a manually entered time or one the user is typing in
+        if (!editedTimeFields.has(id) && document.activeElement !== field) {
+            field.value = isoString;
+        }
+    });
 }
 
 function incrementScore(inputId) {
@@ -145,6 +154,7 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
         evt.target.reset();
         document.getElementById('team-selection').innerHTML = '';
         // Reset times to current time after form reset
+        editedTimeFields.clear();
         setCurrentTime();
         // Reset scores to 0
         document.getElementById('team1Score').value = 0;
@@ -152,9 +162,22 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
     }
 });
 
-// Set default times to now on page load
+// Use the time of submission for untouched time fields
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    if (evt.target.id === 'game-form') {
+        setCurrentTime();
+        evt.detail.parameters['start_time'] = document.getElementById('startTime').value;
+        evt.detail.parameters['end_time'] = document.getElementById('endTime').value;
+    }
+});
+
+// Set default times to now on page load and keep them current
 document.addEventListener('DOMContentLoaded', function() {
+    TIME_FIELD_IDS.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => editedTimeFields.add(id));
+    });
     setCurrentTime();
+    setInterval(setCurrentTime, 10000);
 });
 </script>
 {% endblock %}
