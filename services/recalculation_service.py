@@ -1,51 +1,80 @@
-"""Service for recalculating all derived data after game edits."""
+"""Service for recalculating all data derived from the game history.
 
-from models import db, Game, GamePlayer, CakeBalance
-from services.elo_service import recalculate_all_elo_ratings
-from services.leaderboard_service import recalculate_historical_snapshots
-from services.game_service import update_cake_balance
+ELO changes, cake balances and leaderboard snapshots are all derived from
+games. They are rebuilt per season by replaying that season's games, so every code
+path that records or edits a game goes through :func:`recalculate_season`.
+"""
+
+from collections import defaultdict
+from models import db, Season, CakeBalance, LeaderboardHistory
+from services.elo_service import ordered_games, replay_by_day
+from services.leaderboard_service import add_daily_snapshot
 
 
-def recalculate_all_derived_data(season_id=None):
+def recalculate_season(season, since=None):
     """
-    Recalculate all derived data (ELO, cake balances, leaderboard history).
-    Must be called after editing any game to maintain data integrity.
+    Rebuild every derived value for one season (does not commit).
+
+    - GamePlayer.elo_change for each game of the season
+    - CakeBalance rows of the season (each loser owes each winner per shutout)
+    - LeaderboardHistory snapshots of the season (one per day with games)
 
     Args:
-        season_id: Optional season ID to recalculate. If provided, only recalculates
-                   data for that season. If None, recalculates all seasons.
+        season: Season to rebuild
+        since: Optional date. Only snapshots dated on or after it are
+            rewritten (earlier days cannot be affected by a change at
+            ``since``). All games are still replayed for correct ratings.
     """
-    # 1. Clear ELO changes (for all games or specific season)
-    if season_id is not None:
-        # Clear ELO changes for games in this season
-        db.session.query(GamePlayer).filter(
-            GamePlayer.game_id.in_(
-                db.session.query(Game.id).filter_by(season_id=season_id)
+    snapshots = LeaderboardHistory.query.filter_by(season_id=season.id)
+    if since is not None:
+        snapshots = snapshots.filter(LeaderboardHistory.snapshot_date >= since)
+    snapshots.delete(synchronize_session=False)
+    CakeBalance.query.filter_by(season_id=season.id).delete()
+
+    cakes = defaultdict(int)
+    for day, results, ratings, games_played in replay_by_day(ordered_games(season.id)):
+        for game, changes in results:
+            for gp in game.players:
+                gp.elo_change = changes[gp.team]
+
+            if game.is_shutout:
+                winners = [gp.player_id for gp in game.players if gp.is_winner]
+                losers = [gp.player_id for gp in game.players if not gp.is_winner]
+                for loser_id in losers:
+                    for winner_id in winners:
+                        cakes[(loser_id, winner_id)] += 1
+
+        if since is None or day >= since:
+            add_daily_snapshot(season.id, day, ratings, games_played)
+
+    for (debtor_id, creditor_id), balance in cakes.items():
+        db.session.add(
+            CakeBalance(
+                season_id=season.id,
+                debtor_id=debtor_id,
+                creditor_id=creditor_id,
+                balance=balance,
             )
-        ).update({GamePlayer.elo_change: None}, synchronize_session=False)
-    else:
-        GamePlayer.query.update({GamePlayer.elo_change: None})
+        )
 
-    # 2. Recalculate ELO ratings from scratch
-    recalculate_all_elo_ratings(season_id=season_id)
 
-    # 3. Rebuild cake balances
+def recalculate_all_derived_data(season_id=None, commit=True, since=None):
+    """
+    Recalculate all derived data (ELO, cake balances, leaderboard history).
+    Must be called after recording or editing any game.
+
+    Args:
+        season_id: Optional season ID to recalculate. If None, every season is
+                   recalculated (each starting from INITIAL_ELO).
+        commit: Commit the session afterwards (default True).
+        since: Optional date passed to :func:`recalculate_season` (only with
+               ``season_id``): the earliest day affected by the change.
+    """
     if season_id is not None:
-        # Delete only cake balances for this season
-        CakeBalance.query.filter_by(season_id=season_id).delete()
-        # Rebuild cake balances for this season
-        games = Game.query.filter_by(season_id=season_id).order_by(Game.start_time).all()
+        recalculate_season(db.session.get(Season, season_id), since=since)
     else:
-        # Delete all cake balances
-        CakeBalance.query.delete()
-        # Rebuild all cake balances
-        games = Game.query.order_by(Game.start_time).all()
+        for season in Season.query.order_by(Season.start_date):
+            recalculate_season(season)
 
-    for game in games:
-        if game.is_shutout:
-            update_cake_balance(game)
-
-    # 4. Recalculate historical snapshots
-    recalculate_historical_snapshots(season_id=season_id)
-
-    db.session.commit()
+    if commit:
+        db.session.commit()

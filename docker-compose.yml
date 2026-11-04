@@ -8,5 +8,7 @@ services:
     volumes:
       - ./instance:/app/instance
     environment:
-      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      # Must match the players' time zone: game times are stored as local time
+      - TZ=${TZ:-Europe/Berlin}
     restart: unless-stopped

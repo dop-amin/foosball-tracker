@@ -2,8 +2,10 @@ import logging
 from logging.config import fileConfig
 
 from flask import current_app
+import sqlalchemy as sa
 
 from alembic import context
+from alembic.script import ScriptDirectory
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -49,6 +51,18 @@ def get_metadata():
     if hasattr(target_db, 'metadatas'):
         return target_db.metadatas[None]
     return target_db.metadata
+
+
+def is_upgrade_to_head():
+    """True when the running command is ``upgrade`` to the latest revision."""
+    # Alembic passes the command's step function as ``fn`` and its target as
+    # ``destination_rev``; `stamp head` also targets head but must not create
+    # tables, and commands like `current` have no target at all.
+    opts = getattr(getattr(context, '_proxy', None), 'context_opts', {})
+    return (
+        getattr(opts.get('fn'), '__name__', None) == 'upgrade'
+        and opts.get('destination_rev') in ('head', 'heads')
+    )
 
 
 def run_migrations_offline():
@@ -102,6 +116,20 @@ def run_migrations_online():
             target_metadata=get_metadata(),
             **conf_args
         )
+
+        inspector = sa.inspect(connection)
+        if (
+            is_upgrade_to_head()
+            and not inspector.has_table('alembic_version')
+            and not inspector.has_table('game')
+        ):
+            # Fresh database: the migration chain starts from a pre-existing
+            # schema, so create the current schema and stamp it as up to date.
+            logger.info('Empty database detected, creating schema at head.')
+            get_metadata().create_all(connection)
+            context.get_context().stamp(ScriptDirectory.from_config(config), 'head')
+            connection.commit()
+            return
 
         with context.begin_transaction():
             context.run_migrations()

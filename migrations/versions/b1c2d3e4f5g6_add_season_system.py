@@ -5,6 +5,7 @@ Revises: a1b2c3d4e5f6
 Create Date: 2026-02-13 16:30:00.000000
 
 """
+import calendar
 from alembic import op
 import sqlalchemy as sa
 
@@ -14,6 +15,16 @@ revision = 'b1c2d3e4f5g6'
 down_revision = 'a1b2c3d4e5f6'
 branch_labels = None
 depends_on = None
+
+
+def get_quarter_boundaries(year, quarter):
+    """Return (start_date, end_date) strings of a calendar quarter."""
+    start_month = (quarter - 1) * 3 + 1
+    end_month = start_month + 2
+    end_day = calendar.monthrange(year, end_month)[1]
+    start_date = f"{year}-{start_month:02d}-01 00:00:00"
+    end_date = f"{year}-{end_month:02d}-{end_day:02d} 23:59:59"
+    return start_date, end_date
 
 
 def upgrade():
@@ -70,29 +81,6 @@ def upgrade():
             quarter = (month - 1) // 3 + 1
             return year, quarter
 
-        # Helper function to get quarter boundaries
-        def get_quarter_boundaries(year, quarter):
-            start_month = (quarter - 1) * 3 + 1
-            if quarter == 4:
-                end_month = 12
-                end_day = 31
-            else:
-                end_month = start_month + 2
-                if end_month == 3:
-                    # February
-                    if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0):
-                        end_day = 29
-                    else:
-                        end_day = 28
-                elif end_month in [1, 3, 5, 7, 8, 10, 12]:
-                    end_day = 31
-                else:
-                    end_day = 30
-
-            start_date = f"{year}-{start_month:02d}-01 00:00:00"
-            end_date = f"{year}-{end_month:02d}-{end_day} 23:59:59"
-            return start_date, end_date
-
         # Create all necessary seasons
         start_year, start_quarter = get_quarter(min_dt)
         end_year, end_quarter = get_quarter(max_dt)
@@ -134,22 +122,6 @@ def upgrade():
         year = now.year
         quarter = (now.month - 1) // 3 + 1
 
-        def get_quarter_boundaries(year, quarter):
-            start_month = (quarter - 1) * 3 + 1
-            if quarter == 4:
-                end_month = 12
-                end_day = 31
-            else:
-                end_month = start_month + 2
-                if end_month in [1, 3, 5, 7, 8, 10, 12]:
-                    end_day = 31
-                else:
-                    end_day = 30
-
-            start_date = f"{year}-{start_month:02d}-01 00:00:00"
-            end_date = f"{year}-{end_month:02d}-{end_day} 23:59:59"
-            return start_date, end_date
-
         season_name = f"Q{quarter} {year}"
         start_date, end_date = get_quarter_boundaries(year, quarter)
 
@@ -175,7 +147,7 @@ def upgrade():
                 """
                 UPDATE game
                 SET season_id = :season_id
-                WHERE start_time >= :start_date AND start_time <= :end_date
+                WHERE start_time >= :start_date AND date(start_time) <= date(:end_date)
                 """
             ).bindparams(
                 season_id=season_id,

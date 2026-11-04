@@ -50,9 +50,10 @@ flask db downgrade
 python recalculate_elo.py
 ```
 
-This script performs two operations:
-1. Recalculates all ELO ratings from scratch by replaying games chronologically
-2. Regenerates historical leaderboard snapshots for position tracking over time
+This script replays every season separately (each starting at 1500) and rebuilds:
+1. Per-game ELO changes (a player's season rating is 1500 plus the sum of their changes, see `season_ratings()`)
+2. Cake balances
+3. Historical leaderboard snapshots for position tracking over time
 
 ## Architecture
 
@@ -64,9 +65,11 @@ The application follows a modular Flask blueprint architecture:
 - **config.py**: Configuration settings (database URI, secret key, etc.)
 - **models.py**: SQLAlchemy database models (8 models)
 - **services/**: Business logic layer
-  - `elo_service.py`: ELO rating calculations
-  - `leaderboard_service.py`: Leaderboard and historical snapshot management
-  - `game_service.py`: Game recording and cake balance logic
+  - `elo_service.py`: ELO rating calculations and the single game replay engine
+  - `recalculation_service.py`: Rebuilds all derived data (ELO, cakes, snapshots) per season
+  - `season_service.py`: Quarterly seasons and season transitions
+  - `leaderboard_service.py`: Historical snapshot rows
+  - `game_service.py`: Game form validation and audit log
   - `statistics_service.py`: Statistics, streaks, and badge calculations
   - `tournament_service.py`: Tournament bracket generation and management
 - **blueprints/**: Flask blueprints for route organization
@@ -84,7 +87,7 @@ The application follows a modular Flask blueprint architecture:
 
 ### Data Models (models.py)
 
-**Player**: Player records with name, ELO rating (default 1500), and creation timestamp
+**Player**: Player records with name and creation timestamp. Ratings are not stored on the player: season ratings come from `GamePlayer.elo_change` and the current season is the season of today's quarter
 
 **Game**: Game records with:
 - Scores for both teams
@@ -137,17 +140,18 @@ The application uses Flask blueprints organized by feature:
 
 **ELO Rating System** (services/elo_service.py):
 - `calculate_elo_change()`: Calculates rating changes using standard ELO formula with K-factor of 32
-- `update_elo_ratings()`: Updates player ELO ratings after each game and stores the change in GamePlayer records
-- `recalculate_all_elo_ratings()`: Recalculates all ELO ratings from scratch by replaying games chronologically
+- `ordered_games()`: Games in deterministic replay order (start_time, then id)
+- `season_ratings()`: A season's final ratings from the stored per-game changes
+- `apply_game()` / `replay_games()`: The only ELO replay implementation; everything else uses it
 - Team ratings are averaged before calculation for 2v2 and 2v1 games
 - ELO changes are stored per-player per-game for historical tracking
 
-**Leaderboard Management** (services/leaderboard_service.py):
-- `create_daily_snapshot()`: Creates daily leaderboard snapshots for position tracking
-- `recalculate_historical_snapshots()`: Rebuilds all historical snapshots from game history
+**Derived Data** (services/recalculation_service.py):
+- `recalculate_season()`: Replays one season and rebuilds GamePlayer.elo_change, CakeBalance rows (shutouts: each loser owes each winner a cake), and LeaderboardHistory snapshots (only from `since` onward when given)
+- `recalculate_all_derived_data(season_id=None)`: Runs the above for one or all seasons; called after recording or editing any game
 
 **Game Management** (services/game_service.py):
-- `update_cake_balance()`: Called when a shutout (10-0) occurs. Creates or increments CakeBalance records
+- `parse_game_form()`: Validates submitted games (game type, team sizes, duplicate players, scores, times)
 
 **Statistics & Badges** (services/statistics_service.py):
 - `calculate_player_streaks()`: Computes winning streaks for players
@@ -182,16 +186,20 @@ The schema supports:
 - `452ffef4afe1`: Removed `date_played`, made `start_time` required
 - `467ce614a99a`: Added `elo_rating` to Player model
 - `cfb12dcc8333`: Added `elo_change` to GamePlayer model
+- `b1c2d3e4f5g6`: Added quarterly seasons
+- `c7d8e9f0a1b2`: Data fix for season boundaries and game season assignment
+- `d4e5f6a7b8c9`: Data fix converting tournament game times from UTC to local time
+- `e5f6a7b8c9d0`: Dropped `Player.elo_rating` and `Season.is_current`
 
 ## Development Notes
 
 - Database initialization happens automatically via `db.create_all()` in app.py's main block
-- ELO ratings are recalculated on startup to ensure consistency
+- All derived data (ELO, cake balances, snapshots) is recalculated when `python app.py` starts, so the Docker and NixOS deploy scripts only run `flask db upgrade` before it
 - Schema changes should use Flask-Migrate migrations (see Database Migrations section)
 - All date parsing uses python-dateutil for flexible date format handling
-- The app runs with `host="0.0.0.0"` to support Docker networking
+- The app runs with `host="0.0.0.0"` by default to support Docker networking; `HOST`, `PORT` and `FLASK_DEBUG` environment variables override host, port and debug mode (debug is on unless `FLASK_DEBUG=0`)
 - SQLAlchemy track modifications is disabled for performance
-- When recording games, ELO ratings are updated immediately and cake balances are updated for shutouts
+- When recording or editing games, the affected season is replayed in the same transaction (ELO, cake balances, snapshots)
 - If you are returning status messages do this with HTTP status code 200
 - The application uses an application factory pattern (`create_app()`) for better testability
 - Business logic is separated into service modules in the `services/` directory

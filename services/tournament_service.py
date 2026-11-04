@@ -10,21 +10,19 @@ def generate_tournament_bracket(tournament_id, player_ids):
     Generate a single-elimination tournament bracket.
     Uses power-of-2 bracket structure with byes for odd numbers.
     """
-    tournament = Tournament.query.get(tournament_id)
+    tournament = db.session.get(Tournament, tournament_id)
     if not tournament:
         return False
 
-    num_players = len(player_ids)
+    # Get players (ignoring duplicate/unknown IDs) and randomize their order
+    players = Player.query.filter(Player.id.in_(set(player_ids))).all()
+    num_players = len(players)
     if num_players < 2:
         return False
+    random.shuffle(players)
 
     # Calculate number of rounds needed (log2 of next power of 2)
     num_rounds = math.ceil(math.log2(num_players))
-    total_matches_in_first_round = 2 ** (num_rounds - 1)
-
-    # Get players and randomize their order
-    players = Player.query.filter(Player.id.in_(player_ids)).all()
-    random.shuffle(players)
 
     # Create participants with seeding (after randomization)
     for idx, player in enumerate(players):
@@ -67,10 +65,6 @@ def generate_tournament_bracket(tournament_id, player_ids):
         [m for r, m in match_map.items() if r[0] == num_rounds],
         key=lambda x: x.match_number
     )
-
-    # Calculate number of byes needed (higher seeds get byes)
-    bracket_size = 2 ** num_rounds
-    num_byes = bracket_size - num_players
 
     # Standard bracket seeding order for power of 2
     # For 8 players: [1,8, 4,5, 2,7, 3,6]
@@ -120,7 +114,7 @@ def advance_winner(match, auto_advance_byes=False):
         auto_advance_byes: If True, automatically advance through byes (used during bracket setup)
     """
     if match.winner_id and match.next_match_id:
-        next_match = TournamentMatch.query.get(match.next_match_id)
+        next_match = db.session.get(TournamentMatch, match.next_match_id)
         if next_match:
             # Determine which slot to fill in next match
             parent_matches = TournamentMatch.query.filter_by(

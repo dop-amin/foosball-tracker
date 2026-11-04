@@ -55,7 +55,6 @@
             cat > $out/bin/foosball-tracker-migrate <<EOF
             #!${pkgs.bash}/bin/bash
             ${pythonEnv}/bin/python -m flask db upgrade
-            ${pythonEnv}/bin/python recalculate_elo.py
             EOF
             chmod +x $out/bin/foosball-tracker-migrate
 
@@ -193,6 +192,9 @@
                 Environment = [
                   "DATABASE_PATH=sqlite:///${cfg.dataDir}/foosball.db"
                   "FLASK_APP=${cfg.package}/share/foosball-tracker/app.py"
+                  "FLASK_DEBUG=0"
+                  "HOST=${cfg.host}"
+                  "PORT=${toString cfg.port}"
                 ];
 
                 ExecStartPre = pkgs.writeShellScript "foosball-tracker-pre" ''

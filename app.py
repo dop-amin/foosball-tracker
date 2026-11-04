@@ -1,8 +1,9 @@
+import os
 from flask import Flask
 from flask_migrate import Migrate
 from config import Config
 from models import db
-from services.elo_service import recalculate_all_elo_ratings
+from services.recalculation_service import recalculate_all_derived_data
 from services.season_service import get_current_season
 
 
@@ -35,10 +36,18 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    with app.app_context():
-        db.create_all()
-        # Ensure current season exists (auto-transitions if needed)
-        current_season = get_current_season()
-        # Recalculate ELO ratings for current season on startup
-        recalculate_all_elo_ratings(season_id=current_season.id)
-    app.run(debug=True, host="0.0.0.0")
+    debug = os.environ.get("FLASK_DEBUG", "1").lower() not in ("0", "false", "no")
+    # With the reloader, this block also runs in the parent watcher process;
+    # only initialise the database once (in the serving process).
+    if not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        with app.app_context():
+            db.create_all()
+            # Ensure current season exists (auto-transitions if needed)
+            get_current_season()
+            # Rebuild all derived data (ELO, cakes, snapshots) on startup
+            recalculate_all_derived_data()
+    app.run(
+        debug=debug,
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "5000")),
+    )

@@ -5,7 +5,7 @@
         <div class="form-check">
             <input class="form-check-input" type="checkbox" name="player_ids" value="{{ player.id }}" id="player-{{ player.id }}">
             <label class="form-check-label" for="player-{{ player.id }}">
-                {{ player.name }} <small class="text-muted">({{ player.elo_rating }})</small>
+                {{ player.name }} <small class="text-muted">({{ ratings.get(player.id, initial_elo) }})</small>
             </label>
         </div>
     </div>

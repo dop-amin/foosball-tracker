@@ -1,5 +1,14 @@
-from datetime import datetime, timedelta
-from models import db, Season, Player
+"""Quarterly season management.
+
+Game timestamps are naive local times (entered via datetime-local inputs), so
+all "now" comparisons here use naive local time as well.
+"""
+
+import calendar
+from datetime import datetime
+from flask import request
+from sqlalchemy.exc import IntegrityError
+from models import db, Season
 
 
 def get_quarter_info(date):
@@ -18,6 +27,22 @@ def get_quarter_info(date):
     return quarter, year
 
 
+def season_name(year, quarter):
+    """Name of a season, e.g. "Q4 2026". Seasons are identified by name."""
+    return f"Q{quarter} {year}"
+
+
+def season_name_for(date):
+    """Name of the season (quarter) containing ``date``."""
+    quarter, year = get_quarter_info(date)
+    return season_name(year, quarter)
+
+
+def current_season_name():
+    """Name of the season for today's quarter."""
+    return season_name_for(datetime.now())
+
+
 def get_quarter_boundaries(year, quarter):
     """
     Returns (start_date, end_date) for a given year and quarter.
@@ -33,15 +58,8 @@ def get_quarter_boundaries(year, quarter):
         raise ValueError("Quarter must be between 1 and 4")
 
     start_month = (quarter - 1) * 3 + 1
-    if quarter == 4:
-        end_month = 12
-        end_day = 31
-    else:
-        end_month = start_month + 2
-        if end_month in [1, 3, 5, 7, 8, 10, 12]:
-            end_day = 31
-        else:
-            end_day = 30
+    end_month = start_month + 2
+    end_day = calendar.monthrange(year, end_month)[1]
 
     start_date = datetime(year, start_month, 1, 0, 0, 0)
     end_date = datetime(year, end_month, end_day, 23, 59, 59)
@@ -53,6 +71,13 @@ def create_season(year, quarter):
     """
     Creates a new season for the given year and quarter, or returns the existing one.
 
+    The new season is only flushed, not committed, so it becomes part of the
+    caller's transaction and disappears again if that transaction is rolled
+    back. Call this before making other changes in the session: if another
+    request created the same season concurrently, the session is rolled back.
+    (A savepoint does not help here: pysqlite commits a SAVEPOINT that is the
+    first statement of a transaction when it is released.)
+
     Args:
         year: int
         quarter: int (1-4)
@@ -60,85 +85,29 @@ def create_season(year, quarter):
     Returns:
         Season: The newly created or existing season
     """
-    name = f"Q{quarter} {year}"
+    name = season_name(year, quarter)
     existing = Season.query.filter_by(name=name).first()
     if existing:
         return existing
 
     start_date, end_date = get_quarter_boundaries(year, quarter)
-
-    season = Season(
-        name=name,
-        start_date=start_date,
-        end_date=end_date,
-        is_current=False
-    )
+    season = Season(name=name, start_date=start_date, end_date=end_date)
     db.session.add(season)
-    db.session.commit()
+    try:
+        db.session.flush()
+    except IntegrityError:
+        # Another request created it concurrently
+        db.session.rollback()
+        return Season.query.filter_by(name=name).one()
 
     return season
 
 
-def get_current_season():
-    """
-    Gets or auto-creates the current season based on the current date.
-    If the current date is past the current season's end_date, automatically
-    transitions to the next quarter's season.
-
-    Returns:
-        Season: The current season
-    """
-    now = datetime.utcnow()
-
-    # Try to get the current season
-    current_season = Season.query.filter_by(is_current=True).first()
-
-    # Check if we need to transition to a new season
-    if current_season and now > current_season.end_date:
-        # Time to transition to next quarter
-        current_quarter, current_year = get_quarter_info(current_season.end_date + timedelta(days=1))
-        new_season = create_season(current_year, current_quarter)
-        transition_to_season(new_season)
-        return new_season
-
-    # If no current season exists, create one for the current quarter
-    if not current_season:
-        quarter, year = get_quarter_info(now)
-        season = create_season(year, quarter)
-        transition_to_season(season)
-        return season
-
-    return current_season
-
-
-def transition_to_season(season):
-    """
-    Transitions to a new season by:
-    1. Unmarking all other seasons as current
-    2. Marking the given season as current
-    3. Resetting all player ELO ratings to 1500
-
-    Args:
-        season: Season object to transition to
-    """
-    # Unmark all seasons as current
-    Season.query.update({Season.is_current: False})
-
-    # Mark this season as current
-    season.is_current = True
-
-    # Reset all player ELO ratings to 1500
-    players = Player.query.all()
-    for player in players:
-        player.elo_rating = 1500
-
-    db.session.commit()
-
-
 def get_season_for_date(date):
     """
-    Returns the season that contains the given date.
-    If no season exists for that date, creates one.
+    Returns the season (quarter) that contains the given date, creating it
+    if necessary. Seasons are identified by their quarter name, so stored
+    boundaries are never needed for the lookup.
 
     Args:
         date: datetime object
@@ -146,15 +115,48 @@ def get_season_for_date(date):
     Returns:
         Season: The season containing this date
     """
-    # Find existing season that contains this date
-    season = Season.query.filter(
-        Season.start_date <= date,
-        Season.end_date >= date
-    ).first()
-
-    if season:
-        return season
-
-    # No season found, create one for this date's quarter
     quarter, year = get_quarter_info(date)
     return create_season(year, quarter)
+
+
+def get_current_season():
+    """
+    Gets the season of the current quarter, creating (and committing) it if
+    it does not exist yet.
+
+    Returns:
+        Season: The current season
+    """
+    season = Season.query.filter_by(name=current_season_name()).first()
+    if season is None:
+        season = get_season_for_date(datetime.now())
+        db.session.commit()
+    return season
+
+
+def season_from_request():
+    """Resolve the current request's ``season`` query parameter (default: current)."""
+    return resolve_season_param(request.args.get("season"))
+
+
+def resolve_season_param(season_param):
+    """
+    Resolve a ``season`` query parameter.
+
+    Args:
+        season_param: "current", "all-time" or a season ID
+
+    Returns:
+        tuple (Season or None, selected value). None means "all-time".
+    """
+    if season_param == "all-time":
+        return None, "all-time"
+
+    try:
+        season = db.session.get(Season, int(season_param))
+    except (ValueError, TypeError):
+        season = None
+    if season is not None:
+        return season, season.id
+
+    return get_current_season(), "current"

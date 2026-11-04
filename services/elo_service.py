@@ -1,10 +1,22 @@
-"""ELO rating calculation and management service."""
+"""ELO rating calculation service.
 
-from models import db, Player, Game, GamePlayer
+All ELO numbers in the application are derived by replaying games in
+chronological order through :func:`apply_game`. There is exactly one replay
+implementation so that stored per-game changes, the leaderboard, and the
+historical snapshots can never disagree with each other.
+"""
+
+from itertools import groupby
+from sqlalchemy.orm import selectinload
+from sqlalchemy import func
+from models import db, Game, GamePlayer
+
+INITIAL_ELO = 1500
+K_FACTOR = 32
 
 
 def calculate_elo_change(
-    team1_rating, team2_rating, team1_score, team2_score, k_factor=32
+    team1_rating, team2_rating, team1_score, team2_score, k_factor=K_FACTOR
 ):
     """
     Calculate ELO rating changes for both teams.
@@ -34,69 +46,106 @@ def calculate_elo_change(
     return round(team1_change), round(team2_change)
 
 
-def update_elo_ratings(game):
+def ordered_games(season_id=None):
     """
-    Update ELO ratings for all players in a game and store ELO changes.
-    """
-    # Get team players and their GamePlayer records
-    team1_players = []
-    team2_players = []
-    team1_game_players = []
-    team2_game_players = []
+    Return games in deterministic chronological replay order.
 
-    for gp in game.players:
-        player = Player.query.get(gp.player_id)
-        if gp.team == 1:
-            team1_players.append(player)
-            team1_game_players.append(gp)
-        else:
-            team2_players.append(player)
-            team2_game_players.append(gp)
-
-    # Calculate average team ratings
-    team1_avg_rating = sum(p.elo_rating for p in team1_players) / len(team1_players)
-    team2_avg_rating = sum(p.elo_rating for p in team2_players) / len(team2_players)
-
-    # Calculate ELO changes
-    team1_change, team2_change = calculate_elo_change(
-        team1_avg_rating, team2_avg_rating, game.team1_score, game.team2_score
-    )
-
-    # Update player ratings and store ELO changes
-    for i, player in enumerate(team1_players):
-        player.elo_rating += team1_change
-        team1_game_players[i].elo_change = team1_change
-
-    for i, player in enumerate(team2_players):
-        player.elo_rating += team2_change
-        team2_game_players[i].elo_change = team2_change
-
-
-def recalculate_all_elo_ratings(season_id=None):
-    """
-    Recalculate ELO ratings for all players from scratch by replaying games.
+    Games sharing the same start_time are ordered by id so every replay
+    processes them identically. Players are eager-loaded to avoid N+1 queries.
 
     Args:
-        season_id: Optional season ID to filter games. If provided, only games
-                   in that season are processed. If None, all games are processed
-                   for all-time view.
-
-    This is useful for initializing ELO ratings or fixing inconsistencies.
+        season_id: Optional season ID. None returns games of all seasons.
     """
-    # Reset all player ratings to 1500
-    players = Player.query.all()
-    for player in players:
-        player.elo_rating = 1500
-
-    # Get games in chronological order, optionally filtered by season
-    query = Game.query.order_by(Game.start_time)
+    query = Game.query.options(
+        selectinload(Game.players)
+    ).order_by(Game.start_time, Game.id)
     if season_id is not None:
-        query = query.filter_by(season_id=season_id)
+        query = query.filter(Game.season_id == season_id)
+    return query.all()
 
-    games = query.all()
 
-    # Replay each game to update ELO ratings
+def apply_game(ratings, game):
+    """
+    Apply a single game's result to ``ratings`` in place.
+
+    Team ratings are averaged before the calculation (2v2 and 2v1 games).
+
+    Args:
+        ratings: dict mapping player_id -> current rating (missing = INITIAL_ELO)
+        game: Game with its GamePlayer rows loaded
+
+    Returns:
+        dict mapping team number (1/2) -> rating change applied to that team
+    """
+    team1 = [gp.player_id for gp in game.players if gp.team == 1]
+    team2 = [gp.player_id for gp in game.players if gp.team == 2]
+    if not team1 or not team2:
+        raise ValueError(f"Game {game.id} does not have players on both teams")
+
+    team1_avg = sum(ratings.get(pid, INITIAL_ELO) for pid in team1) / len(team1)
+    team2_avg = sum(ratings.get(pid, INITIAL_ELO) for pid in team2) / len(team2)
+
+    team1_change, team2_change = calculate_elo_change(
+        team1_avg, team2_avg, game.team1_score, game.team2_score
+    )
+
+    for pid in team1:
+        ratings[pid] = ratings.get(pid, INITIAL_ELO) + team1_change
+    for pid in team2:
+        ratings[pid] = ratings.get(pid, INITIAL_ELO) + team2_change
+
+    return {1: team1_change, 2: team2_change}
+
+
+def replay_games(games):
+    """
+    Replay games (already in chronological order) starting everyone at INITIAL_ELO.
+
+    Returns:
+        dict mapping player_id -> final rating (only players who played)
+    """
+    ratings = {}
     for game in games:
-        update_elo_ratings(game)
+        apply_game(ratings, game)
+    return ratings
 
-    db.session.commit()
+
+def season_ratings(season_id):
+    """
+    Final ratings of a season, read from the stored per-game ELO changes.
+
+    Returns:
+        dict mapping player_id -> rating (only players who played the season)
+    """
+    rows = (
+        db.session.query(GamePlayer.player_id, func.sum(GamePlayer.elo_change))
+        .join(Game, GamePlayer.game_id == Game.id)
+        .filter(Game.season_id == season_id)
+        .group_by(GamePlayer.player_id)
+    )
+    return {player_id: INITIAL_ELO + (total or 0) for player_id, total in rows}
+
+
+def replay_by_day(games):
+    """
+    Replay games (already in chronological order) and yield once per game day.
+
+    Ratings start at INITIAL_ELO. The yielded ``ratings`` and ``games_played``
+    dicts are live state that keeps changing after the next step; copy them if
+    they need to be kept.
+
+    Yields:
+        (day, results, ratings, games_played) where ``results`` is a list of
+        (game, changes) for that day's games, ``changes`` being the dict
+        returned by :func:`apply_game`, ``ratings`` maps player_id -> rating
+        and ``games_played`` maps player_id -> games played so far
+    """
+    ratings = {}
+    games_played = {}
+    for day, day_games in groupby(games, key=lambda g: g.start_time.date()):
+        results = []
+        for game in day_games:
+            results.append((game, apply_game(ratings, game)))
+            for gp in game.players:
+                games_played[gp.player_id] = games_played.get(gp.player_id, 0) + 1
+        yield day, results, ratings, games_played

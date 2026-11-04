@@ -1,35 +1,24 @@
 """Blueprint for statistics and chart-related API routes."""
 
 from flask import Blueprint, render_template, request, jsonify
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from collections import defaultdict
 from models import db, Player, Game, GamePlayer, CakeBalance, LeaderboardHistory, Season
-from services.season_service import get_current_season
+from services.elo_service import INITIAL_ELO, season_ratings
+from services.season_service import get_current_season, season_from_request
+from services.leaderboard_service import (
+    position_history_cutoff,
+    limit_to_history_window,
+    extend_snapshots_to_present,
+)
 
 statistics_bp = Blueprint("statistics", __name__)
-
-
-def get_selected_season():
-    """Helper to get season from query params or default to current."""
-    season_param = request.args.get("season", "current")
-
-    if season_param == "current":
-        return get_current_season(), "current"
-    elif season_param == "all-time":
-        return None, "all-time"
-    else:
-        try:
-            season_id = int(season_param)
-            season = Season.query.get_or_404(season_id)
-            return season, season_id
-        except (ValueError, TypeError):
-            return get_current_season(), "current"
 
 
 @statistics_bp.route("/quick-stats")
 def get_quick_stats():
     # Get selected season filter
-    season, season_selected = get_selected_season()
+    season, season_selected = season_from_request()
 
     total_players = Player.query.count()
 
@@ -283,7 +272,7 @@ def get_player_stats(player_id):
         "goal_difference": goals_for - goals_against,
         "shutouts_given": shutouts_given,
         "shutouts_received": shutouts_received,
-        "elo_rating": player.elo_rating,
+        "elo_rating": season_ratings(get_current_season().id).get(player.id, INITIAL_ELO),
         "win_rates_by_type": win_rates_by_type,
         "game_types": game_types,
         "cakes_owed_to_player": cakes_owed_to_player,
@@ -331,10 +320,16 @@ def get_player_position_history(player_id):
     """
     player = Player.query.get_or_404(player_id)
 
-    # Get all snapshots for this player
-    snapshots = LeaderboardHistory.query.filter_by(
-        player_id=player_id
-    ).order_by(LeaderboardHistory.snapshot_date).all()
+    # Load whole seasons that reach into the window, so each season's
+    # carried-forward end point is kept even if its last game is older. Then
+    # cut to the same window as the leaderboard chart.
+    cutoff = datetime.combine(position_history_cutoff(), time.min)
+    snapshots = limit_to_history_window(extend_snapshots_to_present(
+        LeaderboardHistory.query.join(Season).filter(
+            LeaderboardHistory.player_id == player_id,
+            Season.end_date >= cutoff,
+        ).all()
+    ))
 
     if not snapshots:
         return jsonify({

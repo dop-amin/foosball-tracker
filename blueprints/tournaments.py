@@ -2,19 +2,49 @@
 
 from flask import Blueprint, render_template, request, url_for, make_response
 from datetime import datetime, timezone
-from models import db, Player, Game, GamePlayer, Tournament, TournamentMatch
+from models import db, Player, Game, Tournament, TournamentMatch
+from services.game_service import GameValidationError, add_game_players, validate_scores
 from services.tournament_service import generate_tournament_bracket, advance_winner
-from services.elo_service import update_elo_ratings
-from services.leaderboard_service import create_daily_snapshot
+from services.recalculation_service import recalculate_all_derived_data
+from services.elo_service import INITIAL_ELO, season_ratings
+from services.season_service import get_current_season, get_season_for_date
 
 tournaments_bp = Blueprint("tournaments", __name__)
+
+
+def _render_bracket(tournament):
+    """Render the bracket partial, matches grouped by round."""
+    matches = TournamentMatch.query.filter_by(tournament_id=tournament.id).order_by(
+        TournamentMatch.round_number.desc(), TournamentMatch.match_number
+    ).all()
+
+    rounds = {}
+    for match in matches:
+        rounds.setdefault(match.round_number, []).append(match)
+
+    return render_template(
+        "partials/tournament_bracket.html",
+        tournament=tournament,
+        rounds=rounds,
+        max_round=max(rounds.keys()) if rounds else 0
+    )
 
 
 # Tournament API Routes
 @tournaments_bp.route("/api/tournaments/players/select", methods=["GET"])
 def get_tournament_players():
-    players = Player.query.order_by(Player.elo_rating.desc()).all()
-    return render_template("partials/player_selection.html", players=players)
+    ratings = season_ratings(get_current_season().id)
+    players = sorted(
+        Player.query.all(),
+        key=lambda p: ratings.get(p.id, INITIAL_ELO),
+        reverse=True,
+    )
+    return render_template(
+        "partials/player_selection.html",
+        players=players,
+        ratings=ratings,
+        initial_elo=INITIAL_ELO,
+    )
 
 
 @tournaments_bp.route("/api/tournaments", methods=["GET"])
@@ -72,23 +102,7 @@ def create_tournament():
 @tournaments_bp.route("/api/tournaments/<int:tournament_id>/bracket")
 def get_tournament_bracket(tournament_id):
     tournament = Tournament.query.get_or_404(tournament_id)
-    matches = TournamentMatch.query.filter_by(tournament_id=tournament_id).order_by(
-        TournamentMatch.round_number.desc(), TournamentMatch.match_number
-    ).all()
-
-    # Group matches by round
-    rounds = {}
-    for match in matches:
-        if match.round_number not in rounds:
-            rounds[match.round_number] = []
-        rounds[match.round_number].append(match)
-
-    return render_template(
-        "partials/tournament_bracket.html",
-        tournament=tournament,
-        rounds=rounds,
-        max_round=max(rounds.keys()) if rounds else 0
-    )
+    return _render_bracket(tournament)
 
 
 @tournaments_bp.route("/api/tournaments/<int:tournament_id>/matches/<int:match_id>/form", methods=["GET"])
@@ -130,51 +144,28 @@ def record_tournament_match(tournament_id, match_id):
     team1_score = request.form.get("team1_score", type=int)
     team2_score = request.form.get("team2_score", type=int)
 
-    # Validate scores
-    if team1_score is None or team2_score is None:
-        return return_form_with_error("Both scores are required")
-
-    if team1_score < 0 or team2_score < 0:
-        return return_form_with_error("Scores cannot be negative!")
-
-    if team1_score > 11 or team2_score > 11:
-        return return_form_with_error("Maximum score is 11!")
-
-    # Validate that it's not a draw
-    if team1_score == team2_score:
-        return return_form_with_error("Draw games are not allowed. One team must win!")
+    try:
+        validate_scores(team1_score, team2_score)
+    except GameValidationError as e:
+        return return_form_with_error(str(e))
 
     # Determine winner based on score
     winner_id = match.player1_id if team1_score > team2_score else match.player2_id
 
-    # Create the actual game record
+    # Create the actual game record (naive local time, like manually recorded games).
+    # Look up the season first: it may roll back the session on a race.
+    start_time = datetime.now()
+    season = get_season_for_date(start_time)
     game = Game(
+        season_id=season.id,
         game_type="1v1",
         team1_score=team1_score,
         team2_score=team2_score,
-        start_time=datetime.now(timezone.utc)
+        start_time=start_time,
     )
+    add_game_players(game, [match.player1_id], [match.player2_id])
     db.session.add(game)
     db.session.flush()
-
-    # Link players to game
-    gp1 = GamePlayer(
-        game_id=game.id,
-        player_id=match.player1_id,
-        team=1,
-        is_winner=(winner_id == match.player1_id)
-    )
-    gp2 = GamePlayer(
-        game_id=game.id,
-        player_id=match.player2_id,
-        team=2,
-        is_winner=(winner_id == match.player2_id)
-    )
-    db.session.add(gp1)
-    db.session.add(gp2)
-
-    # Update ELO ratings
-    update_elo_ratings(game)
 
     # Update tournament match
     match.winner_id = winner_id
@@ -183,46 +174,17 @@ def record_tournament_match(tournament_id, match_id):
     # Advance winner to next round
     advance_winner(match)
 
-    # Commit the transaction first to ensure all changes are saved
-    db.session.commit()
-
-    # Create daily snapshot after committing the game
-    try:
-        create_daily_snapshot()
-    except Exception as snapshot_error:
-        # Log error but don't fail the tournament match creation
-        print(f"Warning: Failed to create daily snapshot: {snapshot_error}")
-
-    # Check if tournament is complete (must be after commit)
-    finals = TournamentMatch.query.filter_by(
-        tournament_id=tournament_id, round_number=1
-    ).first()
-
-    if finals and finals.winner_id and finals.game_id:
-        # Finals has been played and has a winner - tournament is complete
+    # Finals played - tournament is complete
+    if match.round_number == 1:
         tournament.status = "completed"
         tournament.completed_at = datetime.now(timezone.utc)
-        db.session.commit()
 
-    # Return updated bracket HTML directly (not a redirect)
-    matches = TournamentMatch.query.filter_by(tournament_id=tournament_id).order_by(
-        TournamentMatch.round_number.desc(), TournamentMatch.match_number
-    ).all()
-
-    # Group matches by round
-    rounds = {}
-    for match_obj in matches:
-        if match_obj.round_number not in rounds:
-            rounds[match_obj.round_number] = []
-        rounds[match_obj.round_number].append(match_obj)
+    # Update ELO ratings, cake balances and snapshots for the season, then
+    # commit everything in one transaction
+    recalculate_all_derived_data(season_id=season.id, since=start_time.date())
 
     # On success, return bracket with headers to target the bracket container
-    response = make_response(render_template(
-        "partials/tournament_bracket.html",
-        tournament=tournament,
-        rounds=rounds,
-        max_round=max(rounds.keys()) if rounds else 0
-    ))
+    response = make_response(_render_bracket(tournament))
     response.headers['HX-Retarget'] = '#tournament-bracket'
     response.headers['HX-Reswap'] = 'innerHTML'
     return response

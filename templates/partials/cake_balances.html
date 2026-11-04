@@ -11,8 +11,8 @@
         <tbody>
             {% for balance in balances %}
             <tr>
-                <td>{{ balance.debtor.name }}</td>
-                <td>{{ balance.creditor.name }}</td>
+                <td>{{ balance.debtor_name }}</td>
+                <td>{{ balance.creditor_name }}</td>
                 <td><span class="badge bg-info text-dark">{{ balance.balance }} 🎂</span></td>
             </tr>
             {% endfor %}

@@ -9,7 +9,6 @@ class Season(db.Model):
     name = db.Column(db.String(50), nullable=False, unique=True)  # "Q1 2025"
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime, nullable=False)
-    is_current = db.Column(db.Boolean, default=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -19,7 +18,6 @@ class Season(db.Model):
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    elo_rating = db.Column(db.Integer, default=1500, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -29,7 +27,7 @@ class Player(db.Model):
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     season_id = db.Column(db.Integer, db.ForeignKey("season.id"), nullable=False, index=True)
-    start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    start_time = db.Column(db.DateTime, nullable=False, default=datetime.now)
     end_time = db.Column(db.DateTime)
     game_type = db.Column(db.String(10), nullable=False)  # '1v1', '2v2', '2v1'
     team1_score = db.Column(db.Integer, nullable=False)

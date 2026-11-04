@@ -1,126 +1,47 @@
+{% macro player_select(field, label) %}
+    <div class="mb-3 player-select-wrapper">
+        <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
+            <span class="selected-player-name">{{ label }}</span>
+            <span class="dropdown-arrow">▼</span>
+        </button>
+        <input type="hidden" name="{{ field }}" required>
+        <div class="player-select-dropdown" style="display: none;">
+            {% for player in players %}
+            <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
+            {% endfor %}
+        </div>
+    </div>
+{% endmacro %}
+
 {% if game_type %}
+{% if game_type == '2v1' %}
+<div class="mb-3">
+    <label class="form-label d-block">Two players on</label>
+    <div class="btn-group" role="group" aria-label="Side of the two players">
+        <input type="radio" class="btn-check" name="two_side" id="twoSideBlack" value="black"
+               {% if two_side != 'white' %}checked{% endif %}
+               hx-get="/api/game-form?game_type=2v1&two_side=black" hx-target="#team-selection" hx-trigger="change">
+        <label class="btn btn-outline-dark" for="twoSideBlack">Black Side</label>
+        <input type="radio" class="btn-check" name="two_side" id="twoSideWhite" value="white"
+               {% if two_side == 'white' %}checked{% endif %}
+               hx-get="/api/game-form?game_type=2v1&two_side=white" hx-target="#team-selection" hx-trigger="change">
+        <label class="btn btn-outline-secondary" for="twoSideWhite">White Side</label>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <div class="col-md-6">
         <h6>Black Side</h6>
-        {% if game_type == '1v1' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 1</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team1_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% elif game_type == '2v2' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 1</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team1_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 2</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team1_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% elif game_type == '2v1' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 1</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team1_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 2</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team1_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% endif %}
+        {% for _ in range(team1_size) %}
+            {{ player_select('team1_players', 'Select Player ' ~ loop.index if team1_size > 1 else 'Select Player') }}
+        {% endfor %}
     </div>
     <div class="col-md-6">
         <h6>White Side</h6>
-        {% if game_type == '1v1' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 2</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team2_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% elif game_type == '2v2' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 1</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team2_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player 2</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team2_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% elif game_type == '2v1' %}
-            <div class="mb-3 player-select-wrapper">
-                <button type="button" class="player-select-toggle form-control text-start" onclick="togglePlayerSelect(this)">
-                    <span class="selected-player-name">Select Player</span>
-                    <span class="dropdown-arrow">▼</span>
-                </button>
-                <input type="hidden" name="team2_players" required>
-                <div class="player-select-dropdown" style="display: none;">
-                    {% for player in players %}
-                    <div class="player-option" data-value="{{ player.id }}" onclick="selectPlayer(this)">{{ player.name }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% endif %}
+        {% for _ in range(team2_size) %}
+            {{ player_select('team2_players', 'Select Player ' ~ loop.index if team2_size > 1 else 'Select Player') }}
+        {% endfor %}
     </div>
 </div>
 

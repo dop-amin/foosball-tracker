@@ -1,122 +1,20 @@
 """Blueprint for leaderboard-related API routes."""
 
 from flask import Blueprint, render_template, request, jsonify
+from sqlalchemy.orm import joinedload
 from collections import defaultdict
 from models import db, Player, GamePlayer, Game, CakeBalance, LeaderboardHistory, Season
+from services.elo_service import INITIAL_ELO, ordered_games, replay_games, season_ratings
 from services.statistics_service import calculate_badges, precompute_badge_data
-from services.season_service import get_current_season
+from services.season_service import get_current_season, season_from_request
+from services.leaderboard_service import (
+    position_history_cutoff,
+    limit_to_history_window,
+    extend_snapshots_to_present,
+    all_time_daily_standings,
+)
 
 leaderboard_bp = Blueprint("leaderboard", __name__)
-
-
-def get_selected_season():
-    """Helper to get season from query params or default to current."""
-    season_param = request.args.get("season", "current")
-
-    if season_param == "current":
-        return get_current_season(), "current"
-    elif season_param == "all-time":
-        return None, "all-time"  # None signals "no filter"
-    else:
-        # Specific season ID
-        try:
-            season_id = int(season_param)
-            season = Season.query.get_or_404(season_id)
-            return season, season_id
-        except (ValueError, TypeError):
-            return get_current_season(), "current"
-
-
-def calculate_season_elo_ratings(season_id):
-    """
-    Calculate ELO ratings for all players for a specific season.
-    Returns a dict mapping player_id to season ELO rating.
-    """
-    from services.elo_service import calculate_elo_change
-
-    # Start all players at 1500
-    player_elos = {}
-    all_players = Player.query.all()
-    for player in all_players:
-        player_elos[player.id] = 1500
-
-    # Get games for this season in chronological order
-    games = Game.query.filter_by(season_id=season_id).order_by(Game.start_time).all()
-
-    # Replay each game
-    for game in games:
-        # Get team players
-        team1_players = []
-        team2_players = []
-
-        for gp in game.players:
-            if gp.team == 1:
-                team1_players.append(gp.player_id)
-            else:
-                team2_players.append(gp.player_id)
-
-        # Calculate average team ratings
-        team1_avg = sum(player_elos.get(pid, 1500) for pid in team1_players) / len(team1_players)
-        team2_avg = sum(player_elos.get(pid, 1500) for pid in team2_players) / len(team2_players)
-
-        # Calculate ELO changes
-        team1_change, team2_change = calculate_elo_change(
-            team1_avg, team2_avg, game.team1_score, game.team2_score
-        )
-
-        # Update player ELOs
-        for pid in team1_players:
-            player_elos[pid] = player_elos.get(pid, 1500) + team1_change
-        for pid in team2_players:
-            player_elos[pid] = player_elos.get(pid, 1500) + team2_change
-
-    return player_elos
-
-
-def calculate_alltime_elo_ratings():
-    """
-    Calculate ELO ratings for all players across all games chronologically.
-    Returns a dict mapping player_id to all-time ELO rating.
-    """
-    from services.elo_service import calculate_elo_change
-
-    # Start all players at 1500
-    player_elos = {}
-    all_players = Player.query.all()
-    for player in all_players:
-        player_elos[player.id] = 1500
-
-    # Get all games in chronological order
-    games = Game.query.order_by(Game.start_time).all()
-
-    # Replay each game
-    for game in games:
-        # Get team players
-        team1_players = []
-        team2_players = []
-
-        for gp in game.players:
-            if gp.team == 1:
-                team1_players.append(gp.player_id)
-            else:
-                team2_players.append(gp.player_id)
-
-        # Calculate average team ratings
-        team1_avg = sum(player_elos.get(pid, 1500) for pid in team1_players) / len(team1_players)
-        team2_avg = sum(player_elos.get(pid, 1500) for pid in team2_players) / len(team2_players)
-
-        # Calculate ELO changes
-        team1_change, team2_change = calculate_elo_change(
-            team1_avg, team2_avg, game.team1_score, game.team2_score
-        )
-
-        # Update player ELOs
-        for pid in team1_players:
-            player_elos[pid] = player_elos.get(pid, 1500) + team1_change
-        for pid in team2_players:
-            player_elos[pid] = player_elos.get(pid, 1500) + team2_change
-
-    return player_elos
 
 
 @leaderboard_bp.route("/leaderboard")
@@ -126,17 +24,14 @@ def get_leaderboard():
     min_games = request.args.get("min_games", 5, type=int)  # Default to 5 games
 
     # Get selected season filter
-    season, season_selected = get_selected_season()
+    season, season_selected = season_from_request()
 
-    # Determine if we need to calculate ELO from scratch
-    calculated_elos = None
-    current_season = get_current_season()
-
-    if season is None:  # all-time view
-        calculated_elos = calculate_alltime_elo_ratings()
-    elif season.id != current_season.id:  # past season view
-        # Calculate ELO for this specific past season
-        calculated_elos = calculate_season_elo_ratings(season.id)
+    # A season's ratings are stored as per-game ELO changes; the all-time
+    # view is one continuous replay of every game
+    if season is not None:
+        calculated_elos = season_ratings(season.id)
+    else:
+        calculated_elos = replay_games(ordered_games())
 
     # Calculate player statistics using optimized aggregation query
     # Single query with joins to get all stats at once
@@ -212,11 +107,7 @@ def get_leaderboard():
         losses = total_games - wins
         win_rate = (wins / total_games * 100) if total_games > 0 else 0
 
-        # Use calculated ELO if viewing all-time or past season, otherwise use current season ELO
-        if calculated_elos is not None:
-            elo_rating = calculated_elos.get(player.id, 1500)
-        else:
-            elo_rating = player.elo_rating
+        elo_rating = calculated_elos.get(player.id, INITIAL_ELO)
 
         players_stats.append(
             {
@@ -274,7 +165,7 @@ def get_cake_leaderboard():
     per_page = request.args.get("per_page", 20, type=int)
 
     # Get selected season filter
-    season, season_selected = get_selected_season()
+    season, season_selected = season_from_request()
 
     # Get players with most cakes owed to them
     cake_stats_query = (
@@ -334,7 +225,7 @@ def get_cake_leaderboard():
 @leaderboard_bp.route("/win-rates")
 def get_win_rates():
     # Get selected season filter
-    season, season_selected = get_selected_season()
+    season, season_selected = season_from_request()
 
     # Calculate win rates by game type for each player
     win_rates = {}
@@ -390,16 +281,23 @@ def get_leaderboard_position_chart():
     min_games = request.args.get("min_games", 5, type=int)
 
     # Get selected season filter
-    season, season_selected = get_selected_season()
+    season, season_selected = season_from_request()
 
-    # Get snapshots filtered by season, ordered by date
-    snapshots_query = LeaderboardHistory.query
-
-    # Filter by season if not "all-time"
-    if season is not None:
-        snapshots_query = snapshots_query.filter(LeaderboardHistory.season_id == season.id)
-
-    snapshots = snapshots_query.order_by(LeaderboardHistory.snapshot_date).all()
+    if season is None:
+        # All-time: continuous ELO over all games, like the all-time leaderboard.
+        # Its lines always reach today, so the window ends today.
+        snapshots = all_time_daily_standings(since=position_history_cutoff())
+    else:
+        snapshots = extend_snapshots_to_present(
+            LeaderboardHistory.query.options(
+                joinedload(LeaderboardHistory.player),
+                joinedload(LeaderboardHistory.season),
+            ).filter(
+                LeaderboardHistory.season_id == season.id,
+            ).order_by(LeaderboardHistory.snapshot_date).all()
+        )
+    # The chart spans at most POSITION_HISTORY_MONTHS, ending at its last day
+    snapshots = limit_to_history_window(snapshots)
 
     if not snapshots:
         return jsonify({"dates": [], "datasets": []})
@@ -407,19 +305,16 @@ def get_leaderboard_position_chart():
     # If filtering by min_games, get the set of player IDs that meet the criteria
     filtered_player_ids = None
     if min_games > 0:
-        filtered_player_ids = set()
-        players = Player.query.all()
-        for player in players:
-            # Count games for this player in the selected season
-            games_query = db.session.query(GamePlayer).join(Game).filter(GamePlayer.player_id == player.id)
-
-            # Filter by season if not "all-time"
-            if season is not None:
-                games_query = games_query.filter(Game.season_id == season.id)
-
-            total_games = games_query.count()
-            if total_games >= min_games:
-                filtered_player_ids.add(player.id)
+        # Games per player in the selected season (all games for all-time)
+        games_query = db.session.query(GamePlayer.player_id).join(Game)
+        if season is not None:
+            games_query = games_query.filter(Game.season_id == season.id)
+        filtered_player_ids = {
+            player_id
+            for (player_id,) in games_query.group_by(GamePlayer.player_id).having(
+                db.func.count(GamePlayer.id) >= min_games
+            )
+        }
 
     # Get all unique dates (sorted)
     all_dates = sorted(set(snapshot.snapshot_date for snapshot in snapshots))
@@ -490,7 +385,7 @@ def get_season_options():
     return jsonify({
         "current_season_id": current_season.id,
         "seasons": [
-            {"id": s.id, "name": s.name, "is_current": s.is_current}
+            {"id": s.id, "name": s.name, "is_current": s.id == current_season.id}
             for s in all_seasons
         ]
     })

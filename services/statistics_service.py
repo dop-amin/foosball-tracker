@@ -1,6 +1,6 @@
 """Statistics calculation service including streaks and badges."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from models import db, GamePlayer, Game, CakeBalance
 
@@ -91,7 +91,7 @@ def precompute_badge_data(player_ids, season_id=None):
             cached_data['cake_totals'][player_id] = 0
 
     # Bulk query recent games (last 7 days)
-    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    seven_days_ago = datetime.now() - timedelta(days=7)
     recent_query = db.session.query(
         GamePlayer.player_id,
         func.count(GamePlayer.id).label('game_count')
@@ -217,7 +217,7 @@ def precompute_badge_data(player_ids, season_id=None):
 
     # Compute Addict badge (3+ games per day in last 5 business days)
     # Business days = weekdays (Monday-Friday), excluding weekends
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now().date()
 
     # Find the last 5 business days
     business_days = []
@@ -374,7 +374,7 @@ def calculate_badges(player_stats, all_players_stats, cached_data=None):
         recent_games = cached_data['recent_games'].get(player.id, 0)
         all_recent_games = list(cached_data['recent_games'].values())
     else:
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        seven_days_ago = datetime.now() - timedelta(days=7)
         recent_games = (
             GamePlayer.query.filter_by(player_id=player.id)
             .join(Game)
